@@ -8,8 +8,12 @@ const Auth = require('../controllers/auth.controller')
 const router = express.Router({mergeParams: true});
 
 //const productRoutes = require("./product.route");
+const subSubCategory = require("./subSubCategoryRoute");
+
 
 //router.use("/:subCategoryId/products", productRoutes );
+router.use("/:subCategoryId/subSubCategories", subSubCategory );
+
 
 
 router.route('/')
