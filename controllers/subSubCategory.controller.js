@@ -37,17 +37,41 @@ exports.setSubCategoryIdToBody = (req, res, next) => {
 };
 
 
-// Get all
+// Get all SubSubCategories
 exports.getAllSubSubCategories = asyncHandler(async (req, res) => {
+  const page = req.query.page * 1 || 1;
+  const limit = req.query.limit * 1 || 6;
+  const skip = (page - 1) * limit;
+
   let filterObject = {};
   if (req.params.subCategoryId) filterObject.subCategory = req.params.subCategoryId;
 
-  const subSubCategories = await SubSubCategory.find(filterObject)
-    .populate({ path: 'category', select: 'name -_id' })
-    .populate({ path: 'subCategory', select: 'name -_id' });
+  if (req.query.search) {
+    filterObject.name = { $regex: req.query.search, $options: "i" };
+  }
 
-  res.status(200).json({ results: subSubCategories.length, data: subSubCategories });
+  // ✅ حساب العدد الإجمالي
+  const totalSubSubCategories = await SubSubCategory.countDocuments(filterObject);
+
+  // ✅ عدد الصفحات
+  const totalPages = Math.ceil(totalSubSubCategories / limit);
+
+  const subSubCategories = await SubSubCategory.find(filterObject)
+    .skip(skip)
+    .limit(limit)
+    .populate({ path: "subCategory", select: "name category -_id" });
+
+  res.status(200).json({
+    results: subSubCategories.length,
+    totalSubSubCategories,
+    totalPages,
+    currentPage: page,
+    hasNextPage: page < totalPages,
+    hasPrevPage: page > 1,
+    data: subSubCategories,
+  });
 });
+
 
 // Create
 exports.createSubSubCategory = asyncHandler(async (req, res) => {
