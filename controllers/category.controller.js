@@ -37,26 +37,43 @@ exports.resizeImage = asyncHandler(async (req, res, next) => {
 
 
 exports.getAllCategories = asyncHandler(async (req, res) => {
-    const page = req.query.page * 1  || 1;
-    const limit = req.query.limit * 1 || 6;
-    const skip = (page - 1) * limit
+  const page = req.query.page * 1 || 1;
+  const limit = req.query.limit * 1 || 6;
+  const skip = (page - 1) * limit;
 
+  // فلترة بالـ search
+  const searchQuery = req.query.search
+    ? { name: { $regex: req.query.search, $options: "i" } }
+    : {};
 
-    const searchQuery = req.query.search ? {
-        name: { $regex: req.query.search, $options: "i" }
-    } : {};
+  // إجمالي عدد الكاتيجوريز بعد الفلترة
+  const totalCategories = await CategoryModel.countDocuments(searchQuery);
 
-    const categories = await CategoryModel.find(searchQuery)
-        .skip(skip)
-        .limit(limit);
+  // حساب عدد الصفحات
+  const totalPages = Math.ceil(totalCategories / limit);
 
-res.status(200).json({results: categories.length, page, data: categories})
+  // جلب البيانات
+  const categories = await CategoryModel.find(searchQuery)
+    .skip(skip)
+    .limit(limit);
+
+  res.status(200).json({
+    results: categories.length,
+    totalCategories,
+    totalPages,
+    currentPage: page,
+    hasNextPage: page < totalPages,
+    hasPrevPage: page > 1,
+    data: categories
+  });
 });
 
 
+
+
+
+
 exports.createCategory = asyncHandler(async (req, res) => {
-
-
 const category = await CategoryModel.create(req.body);
 res.status(201).json({ data: category})
 
