@@ -29,7 +29,8 @@ app.use(express.static(path.join(__dirname, "uploads")));
 
 // Mount Routes
 app.use("/api/v1/categories", require("./routes/category.route"));
-app.use("/api/v1/subCategories", require("./routes/subcategory.route"));
+app.use("/api/v1/subCategories", require("./routes/subSubCategoryRoute"));
+app.use("/api/v1/subSubCategories", require("./routes/subcategory.route"));
 app.use("/api/v1/user", require("./routes/user.route"));
 app.use("/api/v1/auth", require("./routes/auth.route"));
 

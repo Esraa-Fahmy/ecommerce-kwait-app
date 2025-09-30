@@ -1,4 +1,9 @@
 const mongoose = require('mongoose');
+const SubSubCategory = require('./subSubCategory.model');
+const ProductModel = require('./product.model')
+
+
+
 
 const subCategorySchema = new mongoose.Schema({
     name: {
@@ -42,6 +47,32 @@ subCategorySchema.post('init', (doc) => {
 // create
 subCategorySchema.post('save', (doc) => {
   setImageURL(doc);
+});
+
+
+
+// ==== Cascade Delete ====
+// عند حذف SubCategory → نحذف SubSubCategories والمنتجات المرتبطة
+subCategorySchema.pre("deleteMany", async function (next) {
+  const subCategories = await this.model.find(this.getFilter());
+  const subCategoryIds = subCategories.map(sc => sc._id);
+
+  // نحذف كل SubSubCategories المرتبطة
+  await SubSubCategory.deleteMany({ subCategory: { $in: subCategoryIds } });
+
+  // نحذف كل Products المرتبطة بالـ SubCategory
+  await ProductModel.deleteMany({ subCategory: { $in: subCategoryIds } });
+
+  next();
+});
+
+subCategorySchema.pre("findOneAndDelete", async function (next) {
+  const subCategory = await this.model.findOne(this.getFilter());
+  if (subCategory) {
+    await SubSubCategory.deleteMany({ subCategory: subCategory._id });
+    await ProductModel.deleteMany({ subCategory: subCategory._id });
+  }
+  next();
 });
 
 
