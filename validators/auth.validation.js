@@ -30,10 +30,11 @@ check('lastName')
       })
     ),
 
-    check('phone')
-    .optional()
-    .isMobilePhone(['ar-EG', 'ar-SA'])
-    .withMessage('Invalid phone number only accepted Egy and SA Phone numbers'),
+ check('phone')
+  .optional()
+  .matches(/^\+?[1-9]\d{7,14}$/) // يقبل من 8 لـ 15 رقم
+  .withMessage('Phone number must be in valid format'),
+
 
   check('password')
     .notEmpty()
