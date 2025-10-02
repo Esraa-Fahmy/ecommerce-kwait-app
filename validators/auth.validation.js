@@ -63,13 +63,9 @@ exports.loginValidator = [
       .withMessage('Email required')
       .isEmail()
       .withMessage('Invalid email address'),
-  
     check('password')
       .notEmpty()
-      .withMessage('Password required')
-      .isLength({ min: 4 })
-      .withMessage('Password must be at least 4 characters')
-  .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*._-])/)
-  .withMessage('Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character (!@#$%^&*._-)'),
+      .withMessage('Password required'),
+
     validatorMiddleware,
   ];
