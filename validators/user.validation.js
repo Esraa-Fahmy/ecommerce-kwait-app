@@ -77,9 +77,7 @@ exports.updateUserValidator = [
     ),
 
  check('phone')
-  .optional()
-  .matches(/^\+?[1-9]\d{7,14}$/) // يقبل من 8 لـ 15 رقم
-  .withMessage('Phone number must be in valid format'),
+  .optional(),
 
   check('profileImg').optional(),
   check('role').optional(),
@@ -143,9 +141,7 @@ exports.updateLoggedUserDataValidator = [
 
  check('phone')
   .optional()
-  .matches(/^\+?[1-9]\d{7,14}$/) // يقبل من 8 لـ 15 رقم
-  .withMessage('Phone number must be in valid format'),
-
+,
   check('profileImg')
     .optional()
     .isString()
