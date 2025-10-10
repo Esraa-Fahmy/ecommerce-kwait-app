@@ -33,6 +33,8 @@ app.use("/api/v1/subCategories", require("./routes/subcategory.route"));
 app.use("/api/v1/subSubCategories", require("./routes/subSubCategoryRoute"));
 app.use("/api/v1/user", require("./routes/user.route"));
 app.use("/api/v1/auth", require("./routes/auth.route"));
+app.use("/api/v1/product", require("./routes/product.route"));
+
 
 
 
