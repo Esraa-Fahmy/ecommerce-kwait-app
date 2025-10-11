@@ -62,7 +62,7 @@ category: {
   },
   ratingsAverage : {
     type :Number,
-    min: [1, 'Rating must be above or equal 1'],
+    min: [0, 'Rating must be above or equal 1'],
     max: [5, 'Rating must be below or equal 5'],
     default: 0,
 
