@@ -6,6 +6,8 @@ const subCategoryModel = require("../models/subcategory.model");
 const productModel = require("../models/product.model");
 const subSubCategoryModel = require("../models/subSubCategory.model");
 const offerModel = require("../models/offer.model");
+const { query } = require('express-validator');
+
 
 
 
