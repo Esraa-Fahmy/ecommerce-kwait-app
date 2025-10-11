@@ -52,14 +52,14 @@ category: {
     ref: 'Category'
   },
 
-  subCategory: [{
+  subCategory:{
     type: mongoose.Schema.ObjectId,
     ref: 'subCategory',
-  }],
-  subSubCategory: [{
+  },
+  subSubCategory:{
     type: mongoose.Schema.ObjectId,
     ref: 'SubSubCategory',
-  }],
+  },
   ratingsAverage : {
     type :Number,
     min: [1, 'Rating must be above or equal 1'],

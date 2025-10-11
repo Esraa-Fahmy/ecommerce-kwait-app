@@ -63,15 +63,6 @@ exports.createProductValidator = [
     .isMongoId()
     .withMessage("Invalid subCategory ID format"),
 
-  check("subSubCategory")
-    .optional()
-    .isArray()
-    .withMessage("SubSubCategories must be an array of IDs"),
-
-  check("subSubCategory.*")
-    .optional()
-    .isMongoId()
-    .withMessage("Invalid subSubCategory ID format"),
 
   check("colors")
     .optional()
