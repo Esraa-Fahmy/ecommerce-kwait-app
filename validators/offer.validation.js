@@ -1,7 +1,6 @@
 const { check } = require("express-validator");
 const validatorMiddleware = require("../middlewares/validatorMiddleware");
 const CategoryModel = require("../models/category.model");
-const SubCategoryModel = require("../models/subcategory.model");
 const subCategoryModel = require("../models/subcategory.model");
 const productModel = require("../models/product.model");
 const subSubCategoryModel = require("../models/subSubCategory.model");
@@ -99,7 +98,7 @@ exports.createOfferValidator = [
             if (!exists) throw new Error(`Category not found for id: ${id}`);
             break;
           case 'subcategory':
-            exists = await SubCategoryModel.findById(id);
+            exists = await subSubCategoryModel.findById(id);
             if (!exists) throw new Error(`SubCategory not found for id: ${id}`);
             break;
           case 'subSubcategory':
