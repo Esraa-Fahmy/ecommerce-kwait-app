@@ -49,7 +49,6 @@ subCategorySchema.post('save', (doc) => {
 
 
 
-// ==== Cascade Delete ====
 // عند حذف SubCategory → نحذف SubSubCategories والمنتجات المرتبطة
 subCategorySchema.pre("deleteMany", async function (next) {
   const subCategories = await this.model.find(this.getFilter());

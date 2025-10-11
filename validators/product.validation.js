@@ -1,5 +1,8 @@
 const { check } = require("express-validator");
 const validatorMiddleware = require("../middlewares/validatorMiddleware");
+const subSubCategoryModel = require("../models/subSubCategory.model");
+const subCategoryModel = require("../models/subcategory.model");
+const CategoryModel = require("../models/category.model");
 
 exports.getProductValidator = [
   check("id").isMongoId().withMessage("Invalid product id format"),
@@ -48,24 +51,38 @@ exports.createProductValidator = [
       return true;
     }),
 
+  // ✅ Category check
   check("category")
     .optional()
     .isMongoId()
-    .withMessage("Invalid category ID format"),
+    .withMessage("Invalid category ID format")
+    .custom(async (categoryId) => {
+      const category = await CategoryModel.findById(categoryId);
+      if (!category) throw new Error("Category not found");
+      return true;
+    }),
 
-
-
+  // ✅ SubCategory check
   check("subCategory")
     .optional()
     .isMongoId()
-    .withMessage("Invalid subCategory ID format"),
+    .withMessage("Invalid subCategory ID format")
+    .custom(async (subCategoryId) => {
+      const subCat = await subCategoryModel.findById(subCategoryId);
+      if (!subCat) throw new Error("SubCategory not found");
+      return true;
+    }),
 
-
-
+  // ✅ SubSubCategory check
   check("subSubCategory")
     .optional()
     .isMongoId()
-    .withMessage("Invalid subSubCategory ID format"),
+    .withMessage("Invalid subSubCategory ID format")
+    .custom(async (subSubCategoryId) => {
+      const subSub = await subSubCategoryModel.findById(subSubCategoryId);
+      if (!subSub) throw new Error("SubSubCategory not found");
+      return true;
+    }),
 
   check("colors")
     .optional()
