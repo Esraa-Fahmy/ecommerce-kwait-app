@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const offerModel = require('./offer.model');
 
 const productSchema = new mongoose.Schema({
   code: {
@@ -104,5 +105,19 @@ const setImageURL = (doc) => {
   productSchema.post('save', (doc) => {
     setImageURL(doc);
   });
+
+
+
+  productSchema.pre("findOneAndDelete", async function(next) {
+  const product = await this.model.findOne(this.getFilter());
+  if (product) {
+    // حذف أو تعطيل كل العروض اللي مرتبطة بالمنتج
+    await offerModel.updateMany(
+      { targetType: "product", targetIds: product._id },
+      { isActive: false }
+    );
+  }
+  next();
+});
 
 module.exports = mongoose.model('Product', productSchema)
