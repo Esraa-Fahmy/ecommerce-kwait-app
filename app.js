@@ -35,6 +35,10 @@ app.use("/api/v1/user", require("./routes/user.route"));
 app.use("/api/v1/auth", require("./routes/auth.route"));
 app.use("/api/v1/product", require("./routes/product.route"));
 app.use("/api/v1/offers", require("./routes/offers.route"));
+app.use("/api/v1/reviews", require("./routes/review.route"));
+app.use("/api/v1/favourite", require("./routes/favouriteList.route"));
+
+
 
 
 
