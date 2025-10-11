@@ -14,7 +14,7 @@ router.get("/", getAllOffersValidator, offerController.getAllOffers);
 // ============================
 // 🟢 Get Single Offer
 // ============================
-router.get("/:id", getOfferValidator, offerController.getSingleOffer);
+router.get("/:id", getOfferValidator, offerController.getOffer);
 
 // ============================
 // 🟢 Create Offer
