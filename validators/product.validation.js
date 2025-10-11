@@ -77,16 +77,6 @@ exports.createProductValidator = [
     .isArray()
     .withMessage("Sizes should be an array of strings"),
 
-  check("ratingsAverage")
-    .optional()
-    .isFloat({ min: 1, max: 5 })
-    .withMessage("Ratings average must be between 1 and 5"),
-
-  check("ratingsQuantity")
-    .optional()
-    .isInt({ min: 0 })
-    .withMessage("Ratings quantity must be a positive integer"),
-
   validatorMiddleware,
 ];
 
