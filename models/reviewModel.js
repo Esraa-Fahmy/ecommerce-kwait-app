@@ -17,6 +17,11 @@ const reviewSchema = new mongoose.Schema(
       ref: 'User',
       required: [true, 'Rating must belong to a user'],
     },
+      product: {  // لازم تضيفي ده
+      type: mongoose.Schema.ObjectId,
+      ref: 'Product',
+      required: [true, 'Rating must belong to a product'],
+    },
   },
   { timestamps: true }
 );
