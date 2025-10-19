@@ -6,13 +6,18 @@ const ApiError = require("../utils/apiError");
 
 // 🧹 إزالة المنتجات اللي خلصت من المخزون
 const removeOutOfStockItems = async (cart) => {
-  cart.cartItems = cart.cartItems.filter(
-    (item) => item.product && item.product.quantity > 0
-  );
+  for (let i = 0; i < cart.cartItems.length; i++) {
+    const item = cart.cartItems[i];
+    const product = await Product.findById(item.product);
+    if (!product || product.quantity <= 0) {
+      cart.cartItems.splice(i, 1);
+      i--; // عشان بعد ما نحذف عنصر نرجع خطوة ورا
+    }
+  }
   await cart.save();
 };
 
-// 🏷 تطبيق الأوفرز (function داخلية مش endpoint)
+// 🏷 تطبيق الأوفرز (function داخلية)
 const applyOffersOnItem = async (item) => {
   const product = await Product.findById(item.product)
     .populate("category subCategory subSubCategory");
@@ -106,10 +111,12 @@ exports.addToCart = asyncHandler(async (req, res, next) => {
   await removeOutOfStockItems(cart);
   await recalcCartTotals(cart);
 
+  const updatedCart = await Cart.findById(cart._id).populate("cartItems.product");
+
   res.status(200).json({
     status: "success",
     message: "Product added to cart successfully",
-    data: cart,
+    data: updatedCart,
   });
 });
 
