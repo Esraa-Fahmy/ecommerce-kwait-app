@@ -4,7 +4,18 @@ const Product = require("../models/product.model");
 const Offer = require("../models/offer.model");
 const ApiError = require("../utils/apiError");
 
-// 🟢 Helper: تطبيق الأوفرز على منتج
+// 🧹 إزالة المنتجات اللي خلصت من المخزون
+const removeOutOfStockItems = async (cart) => {
+  const before = cart.cartItems.length;
+  cart.cartItems = cart.cartItems.filter(
+    (item) => item.product && item.product.quantity > 0
+  );
+  if (cart.cartItems.length !== before) {
+    await cart.save();
+  }
+};
+
+// 🏷 تطبيق الأوفرز (function داخلية مش endpoint)
 const applyOffersOnItem = async (item) => {
   const product = await Product.findById(item.product)
     .populate("category subCategory subSubCategory");
@@ -12,8 +23,6 @@ const applyOffersOnItem = async (item) => {
   if (!product) return item;
 
   const now = new Date();
-
-  // نجيب كل الأوفرز الفعالة
   const offers = await Offer.find({
     isActive: true,
     startDate: { $lte: now },
@@ -46,6 +55,7 @@ const applyOffersOnItem = async (item) => {
   return { ...item, price: finalPrice };
 };
 
+// ⚙ حساب إجمالي الكارت مع العروض
 const recalcCartTotals = async (cart) => {
   let totalPrice = 0;
   let updatedItems = [];
@@ -53,61 +63,48 @@ const recalcCartTotals = async (cart) => {
   for (let item of cart.cartItems) {
     const updatedItem = await applyOffersOnItem(item);
     totalPrice += updatedItem.price * updatedItem.quantity;
-    updatedItems.push({
-      ...item.toObject(),
-      priceAfterOffer: updatedItem.price,
-    });
+    updatedItems.push(updatedItem);
   }
 
   cart.cartItems = updatedItems;
   cart.totalCartPrice = totalPrice;
   cart.totalPriceAfterDiscount = totalPrice;
+
   await cart.save();
 };
 
-
-
-
+// 🟢 إضافة منتج للكارت
 exports.addToCart = asyncHandler(async (req, res, next) => {
-  const { productId, color, quantity = 1, size } = req.body;
+  const { productId, color, quantity = 1 } = req.body;
 
   const product = await Product.findById(productId);
   if (!product) return next(new ApiError("Product not found", 404));
 
-  let cart = await Cart.findOne({ user: req.user._id });
+  // 🧠 تأكد إن المنتج متاح في المخزون
+  if (product.quantity <= 0) {
+    return next(new ApiError("This product is out of stock", 400));
+  }
 
-  const productDetails = {
-    product: productId,
-    title: product.title,
-    imageCover: product.imageCover,
-    Material: product.Material,
-    size,
-    color,
-    quantity,
-    price: product.price,
-  };
+  let cart = await Cart.findOne({ user: req.user._id }).populate("cartItems.product");
 
   if (!cart) {
     cart = await Cart.create({
       user: req.user._id,
-      cartItems: [productDetails],
+      cartItems: [{ product: productId, color, quantity, price: product.price }],
     });
   } else {
-    const existingItemIndex = cart.cartItems.findIndex(
-      (item) =>
-        item.product.toString() === productId &&
-        item.color === color &&
-        item.size === size
+    const itemIndex = cart.cartItems.findIndex(
+      (item) => item.product._id.toString() === productId && item.color === color
     );
 
-    if (existingItemIndex > -1) {
-      // المنتج موجود بنفس المواصفات، نحدث الكمية فقط
-      cart.cartItems[existingItemIndex].quantity += quantity;
+    if (itemIndex > -1) {
+      cart.cartItems[itemIndex].quantity += quantity;
     } else {
-      cart.cartItems.push(productDetails);
+      cart.cartItems.push({ product: productId, color, quantity, price: product.price });
     }
   }
 
+  await removeOutOfStockItems(cart);
   await recalcCartTotals(cart);
 
   res.status(200).json({
@@ -117,15 +114,17 @@ exports.addToCart = asyncHandler(async (req, res, next) => {
   });
 });
 
-
 // 🟡 جلب كارت المستخدم
 exports.getLoggedUserCart = asyncHandler(async (req, res, next) => {
   const cart = await Cart.findOne({ user: req.user._id }).populate({
     path: "cartItems.product",
-    select: "title price imageCover category subCategory subSubCategory",
+    select: "title price imageCover colors sizes Material quantity category subCategory subSubCategory",
   });
 
   if (!cart) return next(new ApiError("No cart found for this user", 404));
+
+  await removeOutOfStockItems(cart);
+  await recalcCartTotals(cart);
 
   res.status(200).json({
     status: "success",
@@ -139,14 +138,19 @@ exports.updateCartItemQuantity = asyncHandler(async (req, res, next) => {
   const { itemId } = req.params;
   const { quantity } = req.body;
 
-  const cart = await Cart.findOne({ user: req.user._id });
+  const cart = await Cart.findOne({ user: req.user._id }).populate("cartItems.product");
   if (!cart) return next(new ApiError("No cart found for this user", 404));
 
   const item = cart.cartItems.id(itemId);
   if (!item) return next(new ApiError("Item not found in cart", 404));
 
-  item.quantity = quantity;
+  // تأكد إن الكمية متاحة في المخزون
+  if (item.product.quantity < quantity) {
+    return next(new ApiError("Not enough stock for this product", 400));
+  }
 
+  item.quantity = quantity;
+  await removeOutOfStockItems(cart);
   await recalcCartTotals(cart);
 
   res.status(200).json({
@@ -164,7 +168,7 @@ exports.removeItemFromCart = asyncHandler(async (req, res, next) => {
     { user: req.user._id },
     { $pull: { cartItems: { _id: itemId } } },
     { new: true }
-  );
+  ).populate("cartItems.product");
 
   if (!cart) return next(new ApiError("Cart not found", 404));
 
@@ -177,13 +181,13 @@ exports.removeItemFromCart = asyncHandler(async (req, res, next) => {
   });
 });
 
-// 🧹 حذف الكارت بالكامل
+// 🧺 حذف الكارت بالكامل
 exports.clearCart = asyncHandler(async (req, res, next) => {
   await Cart.findOneAndDelete({ user: req.user._id });
 
   res.status(204).json({
     status: "success",
     message: "Cart cleared successfully",
-    data: null,
-  });
+    data: null,
+  });
 });
