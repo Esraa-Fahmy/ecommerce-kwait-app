@@ -6,13 +6,10 @@ const ApiError = require("../utils/apiError");
 
 // 🧹 إزالة المنتجات اللي خلصت من المخزون
 const removeOutOfStockItems = async (cart) => {
-  const before = cart.cartItems.length;
   cart.cartItems = cart.cartItems.filter(
     (item) => item.product && item.product.quantity > 0
   );
-  if (cart.cartItems.length !== before) {
-    await cart.save();
-  }
+  await cart.save();
 };
 
 // 🏷 تطبيق الأوفرز (function داخلية مش endpoint)
@@ -35,41 +32,43 @@ const applyOffersOnItem = async (item) => {
     ],
   }).sort({ priority: -1 });
 
-  if (offers.length === 0) return item;
+  let finalPrice = Number(product.price) || 0;
 
-  const offer = offers[0];
-  let finalPrice = product.price;
-
-  if (offer.offerType === "percentage") {
-    finalPrice = product.price - (product.price * offer.discountValue) / 100;
-  } else if (offer.offerType === "fixed") {
-    finalPrice = product.price - offer.discountValue;
-  } else if (offer.offerType === "buyXgetY" && item.quantity >= offer.buyQuantity) {
-    const freeItems = Math.floor(item.quantity / (offer.buyQuantity + offer.getQuantity)) * offer.getQuantity;
-    const paidItems = item.quantity - freeItems;
-    finalPrice = (paidItems * product.price) / item.quantity;
+  if (offers.length > 0) {
+    const offer = offers[0];
+    if (offer.offerType === "percentage") {
+      finalPrice = product.price - (product.price * offer.discountValue) / 100;
+    } else if (offer.offerType === "fixed") {
+      finalPrice = product.price - offer.discountValue;
+    } else if (
+      offer.offerType === "buyXgetY" &&
+      item.quantity >= offer.buyQuantity
+    ) {
+      const freeItems = Math.floor(item.quantity / (offer.buyQuantity + offer.getQuantity)) * offer.getQuantity;
+      const paidItems = item.quantity - freeItems;
+      finalPrice = (paidItems * product.price) / item.quantity;
+    }
   }
 
-  if (finalPrice < 0) finalPrice = 0;
+  if (isNaN(finalPrice) || finalPrice < 0) finalPrice = 0;
 
-  return { ...item, price: finalPrice };
+  item.price = Number(finalPrice);
+  return item;
 };
 
 // ⚙ حساب إجمالي الكارت مع العروض
 const recalcCartTotals = async (cart) => {
   let totalPrice = 0;
-  let updatedItems = [];
 
-  for (let item of cart.cartItems) {
+  for (let i = 0; i < cart.cartItems.length; i++) {
+    const item = cart.cartItems[i];
     const updatedItem = await applyOffersOnItem(item);
-    totalPrice += updatedItem.price * updatedItem.quantity;
-    updatedItems.push(updatedItem);
+    const itemTotal = Number(updatedItem.price) * Number(updatedItem.quantity);
+    if (!isNaN(itemTotal)) totalPrice += itemTotal;
   }
 
-  cart.cartItems = updatedItems;
-  cart.totalCartPrice = totalPrice;
-  cart.totalPriceAfterDiscount = totalPrice;
-
+  cart.totalCartPrice = Number(totalPrice) || 0;
+  cart.totalPriceAfterDiscount = Number(totalPrice) || 0;
   await cart.save();
 };
 
@@ -80,7 +79,6 @@ exports.addToCart = asyncHandler(async (req, res, next) => {
   const product = await Product.findById(productId);
   if (!product) return next(new ApiError("Product not found", 404));
 
-  // 🧠 تأكد إن المنتج متاح في المخزون
   if (product.quantity <= 0) {
     return next(new ApiError("This product is out of stock", 400));
   }
@@ -94,7 +92,8 @@ exports.addToCart = asyncHandler(async (req, res, next) => {
     });
   } else {
     const itemIndex = cart.cartItems.findIndex(
-      (item) => item.product._id.toString() === productId && item.color === color
+      (item) =>
+        item.product._id.toString() === productId && item.color === color
     );
 
     if (itemIndex > -1) {
@@ -144,7 +143,6 @@ exports.updateCartItemQuantity = asyncHandler(async (req, res, next) => {
   const item = cart.cartItems.id(itemId);
   if (!item) return next(new ApiError("Item not found in cart", 404));
 
-  // تأكد إن الكمية متاحة في المخزون
   if (item.product.quantity < quantity) {
     return next(new ApiError("Not enough stock for this product", 400));
   }
@@ -188,6 +186,6 @@ exports.clearCart = asyncHandler(async (req, res, next) => {
   res.status(204).json({
     status: "success",
     message: "Cart cleared successfully",
-    data: null,
-  });
+    data: null,
+  });
 });
