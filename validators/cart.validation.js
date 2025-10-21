@@ -26,19 +26,34 @@ exports.addToCartValidator = [
 
 
 // ✅ تعديل كمية منتج داخل الكارت
-exports.updateCartItemQuantityValidator = [
+exports.updateCartItemValidator = [
   check("itemId")
     .isMongoId()
     .withMessage("Invalid item ID format"),
 
   check("quantity")
-    .notEmpty()
-    .withMessage("Quantity is required")
+    .optional()
     .isInt({ min: 1 })
     .withMessage("Quantity must be at least 1"),
 
+  check("color")
+    .optional()
+    .isString()
+    .withMessage("Color must be a valid string"),
+
+  check("size")
+    .optional()
+    .isString()
+    .withMessage("Size must be a valid string"),
+
+  check("material")
+    .optional()
+    .isString()
+    .withMessage("Material must be a valid string"),
+
   validatorMiddleware,
 ];
+
 
 // ✅ حذف منتج من الكارت
 exports.removeCartItemValidator = [

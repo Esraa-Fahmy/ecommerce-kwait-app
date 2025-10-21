@@ -227,12 +227,11 @@ exports.getLoggedUserCart = asyncHandler(async (req, res, next) => {
   });
 });
 
-// 🔵 تعديل كمية منتج داخل الكارت
-exports.updateCartItemQuantity = asyncHandler(async (req, res, next) => {
+exports.updateCartItem = asyncHandler(async (req, res, next) => {
   const { itemId } = req.params;
-  const { quantity } = req.body;
+  const { quantity, color, size, material } = req.body;
 
-  if (req.user && req.user.role === "admin") {
+  if (req.user.role === "admin") {
     return next(new ApiError("Admin cannot modify cart", 403));
   }
 
@@ -243,24 +242,30 @@ exports.updateCartItemQuantity = asyncHandler(async (req, res, next) => {
   if (!item) return next(new ApiError("Item not found in cart", 404));
 
   const product = await Product.findById(item.product);
-  if (!product) return next(new ApiError("Product linked to this item no longer exists", 404));
+  if (!product) return next(new ApiError("Product not found", 404));
 
-  if (quantity > product.quantity) {
+  // ✅ تحقق من المخزون
+  if (quantity && quantity > product.quantity) {
     return next(new ApiError(`Only ${product.quantity} items available in stock`, 400));
   }
 
-  item.quantity = quantity;
+  // ✅ تحديث الخصائص
+  if (quantity) item.quantity = quantity;
+  if (color) item.color = color;
+  if (size) item.size = size;
+  if (material) item.Material = material;
 
-  await removeOutOfStockItems(cart);
   await recalcCartTotals(cart);
 
   const updatedCart = await Cart.findById(cart._id).populate("cartItems.product");
+
   res.status(200).json({
     status: "success",
-    message: "Quantity updated successfully",
+    message: "Cart item updated successfully",
     data: updatedCart,
   });
 });
+
 
 // 🔴 حذف منتج من الكارت
 exports.removeItemFromCart = asyncHandler(async (req, res, next) => {

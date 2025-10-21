@@ -2,14 +2,14 @@ const express = require("express");
 const {
   addToCart,
   getLoggedUserCart,
-  updateCartItemQuantity,
+  updateCartItem,
   removeItemFromCart,
   clearCart,
 } = require("../controllers/cartController");
 
 const {
   addToCartValidator,
-  updateCartItemQuantityValidator,
+  updateCartItemValidator,
   removeCartItemValidator,
 } = require("../validators/cart.validation");
 
@@ -22,7 +22,7 @@ router.use(authService.protect);
 
 router.post("/", addToCartValidator, addToCart);
 router.get("/", getLoggedUserCart);
-router.put("/:itemId", updateCartItemQuantityValidator, updateCartItemQuantity);
+router.put("/:itemId", updateCartItemValidator, updateCartItem);
 router.delete("/:itemId", removeCartItemValidator, removeItemFromCart);
 router.delete("/", clearCart);
 
