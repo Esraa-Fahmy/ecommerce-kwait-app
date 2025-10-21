@@ -196,6 +196,11 @@ exports.addToCart = asyncHandler(async (req, res, next) => {
     select: "title price imageCover colors sizes Material quantity category subCategory subSubCategory",
   });
 
+  cart.cartItems = cart.cartItems.map(item => ({
+  ...item.toObject(),
+  itemId: item._id, // 👈 نرجع الـ id بوضوح
+}));
+
   res.status(200).json({
     status: "success",
     message: "Product added to cart successfully",
@@ -219,6 +224,13 @@ exports.getLoggedUserCart = asyncHandler(async (req, res, next) => {
     path: "cartItems.product",
     select: "title price imageCover colors sizes Material quantity category subCategory subSubCategory",
   });
+
+
+  cart.cartItems = cart.cartItems.map(item => ({
+  ...item.toObject(),
+  itemId: item._id, // 👈 نرجع الـ id بوضوح
+}));
+
 
   res.status(200).json({
     status: "success",
