@@ -315,6 +315,6 @@ exports.clearCart = asyncHandler(async (req, res, next) => {
   res.status(204).json({
     status: "success",
     message: "Cart cleared successfully",
-    data: null,
+    data: [],
   });
 });

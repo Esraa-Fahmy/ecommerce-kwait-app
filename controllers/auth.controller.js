@@ -142,32 +142,54 @@ exports.forgotPassword = asyncHandler(async (req, res, next) => {
 // @desc    Verify password reset code
 // @route   POST /api/v1/auth/verifyResetCode
 // @access  Public
+// @desc    Verify password reset code
+// @route   POST /api/v1/auth/verifyResetCode
+// @access  Public
 exports.verifyPassResetCode = asyncHandler(async (req, res, next) => {
-  const hashedResetCode = crypto.createHash("sha256").update(req.body.resetCode).digest("hex");
+  const { email, resetCode } = req.body;
 
+  // 1️⃣ التحقق إن المستخدم بعت الإيميل والكود
+  if (!email || !resetCode) {
+    return next(new ApiError("Email and reset code are required", 400));
+  }
+
+  // 2️⃣ نعمل hash للكود زي ما حفظناه قبل كده
+  const hashedResetCode = crypto.createHash("sha256").update(resetCode).digest("hex");
+
+  // 3️⃣ نجيب اليوزر بالإيميل والكود
   const user = await User.findOne({
+    email,
     passwordResetCode: hashedResetCode,
     passwordResetExpires: { $gt: Date.now() },
   });
 
+  // 4️⃣ لو مفيش يوزر أو الكود غلط أو انتهت صلاحيته
   if (!user) {
-    return next(new ApiError("Reset code invalid or expired"));
+    return next(new ApiError("Reset code invalid or expired", 400));
   }
 
+  // 5️⃣ نحدث الحالة إنه تم التحقق من الكود
   user.passwordResetVerified = true;
   await user.save();
 
-  res.status(200).json({ status: "Success" });
+  res.status(200).json({
+    status: "Success",
+    message: "Reset code verified successfully. You can now reset your password.",
+  });
 });
+
 
 // @desc    Reset password
 // @route   POST /api/v1/auth/resetPassword
 // @access  Public
+// @desc    Reset password
+// @route   POST /api/v1/auth/resetPassword
+// @access  Public
 exports.resetPassword = asyncHandler(async (req, res, next) => {
-  const { newPassword, confirmNewPassword } = req.body;
+  const { email, newPassword, confirmNewPassword } = req.body;
 
-  if (!newPassword || !confirmNewPassword) {
-    return next(new ApiError("New password and confirmation are required", 400));
+  if (!email || !newPassword || !confirmNewPassword) {
+    return next(new ApiError("Email, new password, and confirmation are required", 400));
   }
 
   if (newPassword !== confirmNewPassword) {
@@ -175,6 +197,7 @@ exports.resetPassword = asyncHandler(async (req, res, next) => {
   }
 
   const user = await User.findOne({
+    email,
     passwordResetVerified: true,
     passwordResetExpires: { $gt: Date.now() },
   });
