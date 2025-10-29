@@ -77,7 +77,7 @@ exports.createOfferValidator = [
   check("targetType")
     .notEmpty()
     .withMessage("Target type is required")
-    .isIn(['product','subcategory','subSubcategory','category','cart'])
+    .isIn(['product','subcategory','subSubcategory','category','cart', 'order'])
     .withMessage("Invalid target type"),
   check("targetIds").custom(async (targetIds, { req }) => {
     if (['product','category','subcategory','subSubcategory'].includes(req.body.targetType)) {

@@ -48,7 +48,7 @@ const offerSchema = new mongoose.Schema({
   // ====== تحديد الهدف (target) ======
   targetType: {
     type: String,
-    enum: ['product', 'subcategory', 'subSubcategory', 'category', 'cart'],
+    enum: ['product', 'subcategory', 'subSubcategory', 'category', 'cart', 'order'],
     required: [true, 'Target type is required'],
   },
   targetIds: [{
