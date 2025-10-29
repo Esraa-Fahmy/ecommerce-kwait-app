@@ -51,15 +51,14 @@ exports.resizeProductImages = asyncHandler(async (req, res, next) => {
 
 // ✅ Get All Products
 // ============================
+// ✅ Get All Products
 exports.getAllProducts = asyncHandler(async (req, res) => {
   const page = req.query.page * 1 || 1;
   const limit = req.query.limit * 1 || 10;
   const skip = (page - 1) * limit;
 
-  // فلترة بالـ search + category + subCategory + subSubCategory
+  // 🔹 فلترة
   const filter = {};
-
-  // 🔍 بحث بالاسم أو الوصف أو الكود
   if (req.query.search) {
     filter.$or = [
       { title: { $regex: req.query.search, $options: "i" } },
@@ -67,30 +66,28 @@ exports.getAllProducts = asyncHandler(async (req, res) => {
       { code: { $regex: req.query.search, $options: "i" } },
     ];
   }
+  if (req.query.category) filter.category = req.query.category;
+  if (req.query.subCategory) filter.subCategory = req.query.subCategory;
+  if (req.query.subSubCategory) filter.subSubCategory = req.query.subSubCategory;
 
-  // 🟢 فلترة بالفئات
-  if (req.query.category) {
-    filter.category = req.query.category;
-  }
-  if (req.query.subCategory) {
-    filter.subCategory = req.query.subCategory;
-  }
-  if (req.query.subSubCategory) {
-    filter.subSubCategory = req.query.subSubCategory;
+  // 🔹 ترتيب: default الأحدث أولاً
+  let sortOption = { createdAt: -1 };
+  if (req.query.topSelling === "true") {
+    sortOption = { sold: -1 }; // الأعلى مبيعًا أولاً
   }
 
-  // 📊 حساب إجمالي النتائج
+  // 🔹 إجمالي النتائج
   const totalProducts = await ProductModel.countDocuments(filter);
   const totalPages = Math.ceil(totalProducts / limit);
 
-  // 📦 جلب المنتجات بالترتيب الأحدث أولاً
+  // 🔹 جلب المنتجات
   const products = await ProductModel.find(filter)
     .populate("category", "name")
     .populate("subCategory", "name")
     .populate("subSubCategory", "name")
     .skip(skip)
     .limit(limit)
-    .sort({ createdAt: -1 }); // ✅ الأحدث أولاً
+    .sort(sortOption);
 
   res.status(200).json({
     results: products.length,
@@ -102,6 +99,7 @@ exports.getAllProducts = asyncHandler(async (req, res) => {
     data: products,
   });
 });
+
 
 // ============================
 // ✅ Get Single Product
