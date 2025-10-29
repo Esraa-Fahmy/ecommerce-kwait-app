@@ -93,56 +93,41 @@ const findActiveCartAndPopulate = async (userId) => {
 // =================== Create Order ===================
 exports.createOrder = asyncHandler(async (req, res, next) => {
   const userId = req.user._id;
-  const {
-    shippingAddress, // object كامل يمكن للمستخدم تعديله
-    paymentMethod,   // 'cod' أو 'card'
-    couponCode,
-    createdAtClient
-  } = req.body;
+  let { shippingAddress, paymentMethod, couponCode, createdAtClient } = req.body;
 
-  if (!paymentMethod || !["cod", "card"].includes(paymentMethod)) {
+  if (typeof shippingAddress === "string") shippingAddress = JSON.parse(shippingAddress);
+
+  if (!paymentMethod || !['cod','card'].includes(paymentMethod))
     return next(new ApiError("Invalid payment method", 400));
-  }
 
-  // 1️⃣ load cart
   const cart = await findActiveCartAndPopulate(userId);
-  if (!cart || !cart.cartItems.length) {
+  if (!cart || !cart.cartItems.length)
     return next(new ApiError("Cart is empty", 400));
-  }
 
-  // 2️⃣ build order items + apply item-level offers
-  let totalBeforeDiscount = 0;
-  let subtotalAfterItemOffers = 0;
-  let discountDetails = [];
-  const itemsForOrder = [];
+  let totalBeforeDiscount = 0, subtotalAfterItemOffers = 0, discountDetails = [], itemsForOrder = [];
 
   for (const cartItem of cart.cartItems) {
     const prod = cartItem.product;
     if (!prod) continue;
-
-    // stock check
-    if (prod.quantity < cartItem.quantity) {
+    if (prod.quantity < cartItem.quantity) 
       return next(new ApiError(`Only ${prod.quantity} units available for ${prod.title}`, 400));
-    }
 
     const qty = Number(cartItem.quantity || 1);
     const basePrice = Number(prod.price) || 0;
     totalBeforeDiscount += basePrice * qty;
 
     const best = await applyBestItemOffer(prod, qty);
-    const priceAfterOffer = Number(best.priceAfterOffer);
-    subtotalAfterItemOffers += priceAfterOffer * qty;
+    subtotalAfterItemOffers += best.priceAfterOffer * qty;
 
     if (best.appliedOffer) {
       discountDetails.push({
         source: `offer:${best.appliedOffer._id}`,
         type: best.appliedOffer.offerType,
         value: best.appliedOffer.discountValue ?? null,
-        amount: Number((basePrice - priceAfterOffer) * qty),
+        amount: Number((basePrice - best.priceAfterOffer) * qty)
       });
     }
 
-    // snapshot of item
     const selectedAttributes = {};
     if (cartItem.color) selectedAttributes.color = cartItem.color;
     if (cartItem.size) selectedAttributes.size = cartItem.size;
@@ -157,47 +142,28 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
       selectedAttributes,
       quantity: qty,
       price: basePrice,
-      priceAfterOffer,
+      priceAfterOffer: best.priceAfterOffer
     });
   }
 
-  // 3️⃣ shipping
   let shippingPrice = 0;
-  if (shippingAddress && shippingAddress.city) {
+  if (shippingAddress?.city) {
     const cityDoc = await Shipping.findOne({ city: shippingAddress.city });
     if (cityDoc) shippingPrice = Number(cityDoc.cost || 0);
   }
 
-  // 4️⃣ apply cart-level freeShipping
-  const now = new Date();
-  const activeOffers = await Offer.find({ isActive: true, startDate: { $lte: now }, endDate: { $gte: now } });
-  for (const off of activeOffers) {
-    if (off.offerType === "freeShipping") {
-      if (!off.minCartValue || subtotalAfterItemOffers >= off.minCartValue) {
-        shippingPrice = 0;
-        discountDetails.push({
-          source: `offer:${off._id}`,
-          type: "freeShipping",
-          value: null,
-          amount: 0
-        });
-        break;
-      }
-    }
-  }
-
-  // 5️⃣ coupon
+  // coupon logic
   let totalAfterDiscount = subtotalAfterItemOffers;
   let totalDiscount = 0;
   let couponApplied = null;
+  const now = new Date();
+  const activeOffers = await Offer.find({ isActive: true, startDate: { $lte: now }, endDate: { $gte: now } });
 
   if (couponCode) {
     const coupon = activeOffers.find(o => o.offerType === "coupon" && o.couponCode?.toLowerCase() === couponCode.toLowerCase());
     if (!coupon) return next(new ApiError("Invalid or expired coupon", 400));
-
-    if (coupon.minCartValue && subtotalAfterItemOffers < coupon.minCartValue) {
+    if (coupon.minCartValue && subtotalAfterItemOffers < coupon.minCartValue)
       return next(new ApiError(`Coupon requires minimum cart value ${coupon.minCartValue}`, 400));
-    }
 
     let couponAmount = 0;
     if (coupon.discountValue != null) {
@@ -213,18 +179,16 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
       source: `coupon:${coupon.couponCode}`,
       type: coupon.discountValue < 1 ? "percentage" : "fixed",
       value: coupon.discountValue,
-      amount: Number(totalDiscount),
+      amount: Number(totalDiscount)
     });
   }
 
-  // 6️⃣ final total
   const finalTotal = totalAfterDiscount + shippingPrice;
 
-  // 7️⃣ create order
   const orderDoc = await Order.create({
     user: userId,
     items: itemsForOrder,
-    shippingAddress, // خليه object كامل، المستخدم يقدر يعدل أي حقل
+    shippingAddress,
     paymentMethod,
     shippingPrice,
     coupon: couponApplied ? {
@@ -240,23 +204,11 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
     createdAtClient: createdAtClient ? new Date(createdAtClient) : undefined,
   });
 
-  // 8️⃣ clear cart
   await Cart.findOneAndDelete({ user: userId });
 
-  // 9️⃣ respond
   res.status(201).json({
     status: "success",
-    data: {
-      order: orderDoc,
-      summary: {
-        totalBefore: totalBeforeDiscount,
-        totalAfterDiscount,
-        totalDiscount,
-        discountDetails,
-        shippingPrice,
-        finalTotal
-      }
-    }
+    data: { order: orderDoc, summary: { totalBefore: totalBeforeDiscount, totalAfterDiscount, totalDiscount, discountDetails, shippingPrice, finalTotal } }
   });
 });
 
