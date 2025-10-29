@@ -38,6 +38,9 @@ app.use("/api/v1/offers", require("./routes/offers.route"));
 app.use("/api/v1/reviews", require("./routes/review.route"));
 app.use("/api/v1/favourite", require("./routes/favouriteList.route"));
 app.use("/api/v1/cart", require("./routes/cart.route"));
+app.use("/api/v1/shipping", require("./routes/shippingRoute"));
+app.use("/api/v1/orders", require("./routes/orderRoute"));
+
 
 
 
