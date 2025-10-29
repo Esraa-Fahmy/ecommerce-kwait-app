@@ -12,22 +12,31 @@ const {uploadSingleImage} = require('../middlewares/uploadImageMiddleWare')
 // Upload single image
 exports.uploadsubCategoryImage = uploadSingleImage('image');
 
+// Image processing
 exports.resizeImage = asyncHandler(async (req, res, next) => {
+  const filename = `subCategory-${uuidv4()}-${Date.now()}.jpeg`;
+
   if (req.file) {
-    const folderPath = "uploads/subCategories/";
-    if (!fs.existsSync(folderPath)) fs.mkdirSync(folderPath, { recursive: true });
 
-    // ننقل الصورة لمجلد خاص بـ subSubCategories
-    const newFileName = `subCategory-${uuidv4()}-${Date.now()}${path.extname(req.file.filename)}`;
-    const newFilePath = path.join(folderPath, newFileName);
+  const path = "uploads/subCategories/";
+        if (!fs.existsSync(path)) {
+            fs.mkdirSync(path, { recursive: true });
+        }
 
-    fs.renameSync(req.file.path, newFilePath); // نقل الصورة من مجلد uploads الرئيسي
+    await sharp(req.file.buffer)
+      .toFormat('jpeg')
+      .jpeg({ quality: 100 })
+      .toFile(`uploads/subCategories/${filename}`);
 
-    req.body.image = newFileName; // نحط اسم الصورة في body
+    // Save image into our db
+    req.body.image = filename;
   }
 
   next();
 });
+
+
+
 
 
 exports.setCategoryIdToBody = (req, res , next) => {

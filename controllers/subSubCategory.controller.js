@@ -12,17 +12,20 @@ exports.uploadSubSubCategoryImage = uploadSingleImage('image');
 
 // Image processing
 exports.resizeImage = asyncHandler(async (req, res, next) => {
+  const filename = `subSubCategory-${uuidv4()}-${Date.now()}.jpeg`;
+
   if (req.file) {
-    const folderPath = "uploads/subSubCategories/";
-    if (!fs.existsSync(folderPath)) fs.mkdirSync(folderPath, { recursive: true });
+    const path = "uploads/subSubCategories/";
+    if (!fs.existsSync(path)) {
+      fs.mkdirSync(path, { recursive: true });
+    }
 
-    // ننقل الصورة لمجلد خاص بـ subSubCategories
-    const newFileName = `subSubCategory-${uuidv4()}-${Date.now()}${path.extname(req.file.filename)}`;
-    const newFilePath = path.join(folderPath, newFileName);
+    await sharp(req.file.buffer)
+      .toFormat('jpeg')
+      .jpeg({ quality: 100 })
+      .toFile(`${path}${filename}`);
 
-    fs.renameSync(req.file.path, newFilePath); // نقل الصورة من مجلد uploads الرئيسي
-
-    req.body.image = newFileName; // نحط اسم الصورة في body
+    req.body.image = filename;
   }
 
   next();
