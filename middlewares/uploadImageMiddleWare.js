@@ -30,4 +30,4 @@ const upload = multer({ storage: multerStorage, fileFilter: multerFilter });
 
 exports.uploadSingleImage = (fieldName) => upload.single(fieldName);
 
-exports.uploadMultipleImages = (arrayOfFields) => upload.fields(arrayOfFields);
+exports.uploadMixOfImages = (arrayOfFields) => upload.fields(arrayOfFields);
