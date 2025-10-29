@@ -94,39 +94,34 @@ const findActiveCartAndPopulate = async (userId) => {
 exports.createOrder = asyncHandler(async (req, res, next) => {
   const userId = req.user._id;
   const {
-    shippingAddress, // object with firstName,lastName, city, governorate, street, building, apartment, floor, phone, type, note ...
-    paymentMethod, // 'cod' or 'card'
-    couponCode, // optional
-    createdAtClient,
+    shippingAddress, // object كامل يمكن للمستخدم تعديله
+    paymentMethod,   // 'cod' أو 'card'
+    couponCode,
+    createdAtClient
   } = req.body;
 
   if (!paymentMethod || !["cod", "card"].includes(paymentMethod)) {
     return next(new ApiError("Invalid payment method", 400));
   }
 
-  // 1) load cart
+  // 1️⃣ load cart
   const cart = await findActiveCartAndPopulate(userId);
-  if (!cart || !cart.cartItems || cart.cartItems.length === 0) {
+  if (!cart || !cart.cartItems.length) {
     return next(new ApiError("Cart is empty", 400));
   }
 
-  // 2) check stock and build order items applying item-level offers
-  let totalBeforeDiscount = 0; // sum base price * qty
-  let subtotalAfterItemOffers = 0; // after product-level offers
+  // 2️⃣ build order items + apply item-level offers
+  let totalBeforeDiscount = 0;
+  let subtotalAfterItemOffers = 0;
   let discountDetails = [];
-
   const itemsForOrder = [];
 
   for (const cartItem of cart.cartItems) {
     const prod = cartItem.product;
     if (!prod) continue;
 
-    // check stock availability
-    if (prod.quantity <= 0) {
-      // skip out-of-stock items (could also fail the order, but we prefer to fail)
-      return next(new ApiError(`Product ${prod.title} is out of stock`, 400));
-    }
-    if (cartItem.quantity > prod.quantity) {
+    // stock check
+    if (prod.quantity < cartItem.quantity) {
       return next(new ApiError(`Only ${prod.quantity} units available for ${prod.title}`, 400));
     }
 
@@ -134,21 +129,20 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
     const basePrice = Number(prod.price) || 0;
     totalBeforeDiscount += basePrice * qty;
 
-    // apply best product-level offer
     const best = await applyBestItemOffer(prod, qty);
     const priceAfterOffer = Number(best.priceAfterOffer);
     subtotalAfterItemOffers += priceAfterOffer * qty;
 
     if (best.appliedOffer) {
       discountDetails.push({
-        source: `offer:${best.appliedOffer._id.toString()}`,
+        source: `offer:${best.appliedOffer._id}`,
         type: best.appliedOffer.offerType,
         value: best.appliedOffer.discountValue ?? null,
-        amount: Number((basePrice - priceAfterOffer) * qty) || 0,
+        amount: Number((basePrice - priceAfterOffer) * qty),
       });
     }
 
-    // prepare order item snapshot (including selected attributes stored in cart)
+    // snapshot of item
     const selectedAttributes = {};
     if (cartItem.color) selectedAttributes.color = cartItem.color;
     if (cartItem.size) selectedAttributes.size = cartItem.size;
@@ -163,188 +157,109 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
       selectedAttributes,
       quantity: qty,
       price: basePrice,
-      priceAfterOffer: priceAfterOffer,
+      priceAfterOffer,
     });
   }
 
-  // 3) shipping cost (admin-maintained shipping table)
+  // 3️⃣ shipping
   let shippingPrice = 0;
-  let shippingReason = "normal";
   if (shippingAddress && shippingAddress.city) {
     const cityDoc = await Shipping.findOne({ city: shippingAddress.city });
-    if (cityDoc) {
-      shippingPrice = Number(cityDoc.cost || 0);
-    }
+    if (cityDoc) shippingPrice = Number(cityDoc.cost || 0);
   }
 
-  // 4) gather active cart-level offers and coupons
+  // 4️⃣ apply cart-level freeShipping
   const now = new Date();
-  const activeOffers = await Offer.find({
-    isActive: true,
-    startDate: { $lte: now },
-    endDate: { $gte: now },
-  });
-
-  // 4.a) handle freeShipping offers
+  const activeOffers = await Offer.find({ isActive: true, startDate: { $lte: now }, endDate: { $gte: now } });
   for (const off of activeOffers) {
     if (off.offerType === "freeShipping") {
-      // condition: optionally minCartValue or other checks can be added
       if (!off.minCartValue || subtotalAfterItemOffers >= off.minCartValue) {
         shippingPrice = 0;
-        shippingReason = `freeShipping:${off._id.toString()}`;
         discountDetails.push({
-          source: `offer:${off._id.toString()}`,
+          source: `offer:${off._id}`,
           type: "freeShipping",
           value: null,
-          amount: 0,
+          amount: 0
         });
         break;
       }
     }
   }
 
-  // 5) apply coupon (if provided) and cartDiscount. We'll:
-  //    - compute couponDiscountAmount (if coupon valid)
-  //    - compute bestCartDiscountAmount (from offers of type cartDiscount)
-  //    - choose the one with larger amount (not stacking coupon + cartDiscount). Coupon plus product offers is ok.
-  let totalDiscount = 0;
+  // 5️⃣ coupon
   let totalAfterDiscount = subtotalAfterItemOffers;
+  let totalDiscount = 0;
   let couponApplied = null;
 
   if (couponCode) {
-    const coupon = activeOffers.find(
-      (o) => o.offerType === "coupon" && o.couponCode && o.couponCode.toLowerCase() === couponCode.toLowerCase()
-    );
+    const coupon = activeOffers.find(o => o.offerType === "coupon" && o.couponCode?.toLowerCase() === couponCode.toLowerCase());
     if (!coupon) return next(new ApiError("Invalid or expired coupon", 400));
 
-    // validate minCartValue or userGroup if needed
     if (coupon.minCartValue && subtotalAfterItemOffers < coupon.minCartValue) {
       return next(new ApiError(`Coupon requires minimum cart value ${coupon.minCartValue}`, 400));
     }
 
     let couponAmount = 0;
     if (coupon.discountValue != null) {
-      if (coupon.discountValue < 1) {
-        // percent stored as 0.xx or maybe as number <=100? we expect percent value as number (if <1 treat as fraction)
-        couponAmount = subtotalAfterItemOffers * coupon.discountValue;
-      } else {
-        couponAmount = coupon.discountValue;
-      }
+      couponAmount = coupon.discountValue < 1 ? subtotalAfterItemOffers * coupon.discountValue : coupon.discountValue;
     }
 
     couponApplied = coupon;
-    totalAfterDiscount = subtotalAfterItemOffers - couponAmount;
+    totalAfterDiscount -= couponAmount;
     if (totalAfterDiscount < 0) totalAfterDiscount = 0;
-    totalDiscount = (subtotalAfterItemOffers - totalAfterDiscount);
-    if (totalDiscount > 0) {
-      discountDetails.push({
-        source: `coupon:${coupon.couponCode}`,
-        type: coupon.discountValue < 1 ? "percentage" : "fixed",
-        value: coupon.discountValue,
-        amount: Number(totalDiscount),
-      });
-    }
+    totalDiscount = subtotalAfterItemOffers - totalAfterDiscount;
+
+    discountDetails.push({
+      source: `coupon:${coupon.couponCode}`,
+      type: coupon.discountValue < 1 ? "percentage" : "fixed",
+      value: coupon.discountValue,
+      amount: Number(totalDiscount),
+    });
   }
 
-  // compute best cartDiscount (if any)
-  let bestCartOffer = null;
-  let bestCartOfferAmount = 0;
-  for (const off of activeOffers) {
-    if (off.offerType === "cartDiscount") {
-      if (off.minCartValue && subtotalAfterItemOffers < off.minCartValue) continue;
-      let amount = 0;
-      if (off.discountValue != null) {
-        if (off.discountValue < 1) amount = subtotalAfterItemOffers * off.discountValue;
-        else amount = off.discountValue;
-      }
-      if (amount > bestCartOfferAmount) {
-        bestCartOfferAmount = amount;
-        bestCartOffer = off;
-      }
-    }
-  }
+  // 6️⃣ final total
+  const finalTotal = totalAfterDiscount + shippingPrice;
 
-  // If coupon existed, compare coupon vs cartDiscount => pick bigger (do not stack)
-  if (bestCartOffer) {
-    if (!couponApplied) {
-      // apply cartOffer
-      totalAfterDiscount = subtotalAfterItemOffers - bestCartOfferAmount;
-      if (totalAfterDiscount < 0) totalAfterDiscount = 0;
-      totalDiscount += bestCartOfferAmount;
-      discountDetails.push({
-        source: `offer:${bestCartOffer._id.toString()}`,
-        type: bestCartOffer.discountValue < 1 ? "percentage" : "fixed",
-        value: bestCartOffer.discountValue,
-        amount: Number(bestCartOfferAmount),
-      });
-    } else {
-      // coupon applied — check whether cartOffer gives better discount than coupon
-      // couponDiscount was totalDiscount (above). Compare to bestCartOfferAmount.
-      if (bestCartOfferAmount > totalDiscount) {
-        // replace coupon effect with cart offer
-        // remove coupon entry from discountDetails:
-        discountDetails = discountDetails.filter(d => !(d.source && d.source.startsWith("coupon:")));
-        // apply cart offer instead
-        totalDiscount = bestCartOfferAmount;
-        totalAfterDiscount = subtotalAfterItemOffers - bestCartOfferAmount;
-        discountDetails.push({
-          source: `offer:${bestCartOffer._id.toString()}`,
-          type: bestCartOffer.discountValue < 1 ? "percentage" : "fixed",
-          value: bestCartOffer.discountValue,
-          amount: Number(bestCartOfferAmount),
-        });
-      }
-      // else keep coupon as applied (already in discountDetails)
-    }
-  }
-
-  // 6) final totals (include shipping for COD; for card we may still include shipping)
-  // you said: "لو اختار الدفع عند الاستلام هيهُر سعر الشحن للمكان بتاعه وبيضاف ع اجمالي" — so always add shippingPrice to final payable.
-  const totalBefore = Number(totalBeforeDiscount) || 0;
-  const totalAfterItemsAndCartOffers = Number(totalAfterDiscount) || Number(subtotalAfterItemOffers || 0);
-  const finalTotal = Number(totalAfterItemsAndCartOffers) + Number(shippingPrice || 0);
-
-  // 7) create order doc
+  // 7️⃣ create order
   const orderDoc = await Order.create({
     user: userId,
     items: itemsForOrder,
-    shippingAddress,
+    shippingAddress, // خليه object كامل، المستخدم يقدر يعدل أي حقل
     paymentMethod,
     shippingPrice,
-    coupon: couponApplied
-      ? {
-          code: couponApplied.couponCode,
-          discountType: couponApplied.discountValue < 1 ? "percentage" : "fixed",
-          discountValue: couponApplied.discountValue,
-        }
-      : undefined,
-    totalBeforeDiscount: totalBefore,
-    totalDiscount: Number(totalDiscount) || 0,
-    totalAfterDiscount: Number(totalAfterItemsAndCartOffers),
+    coupon: couponApplied ? {
+      code: couponApplied.couponCode,
+      discountType: couponApplied.discountValue < 1 ? "percentage" : "fixed",
+      discountValue: couponApplied.discountValue
+    } : undefined,
+    totalBeforeDiscount,
+    totalDiscount,
+    totalAfterDiscount,
     discountDetails,
     status: "pending",
     createdAtClient: createdAtClient ? new Date(createdAtClient) : undefined,
   });
 
-  // 8) clear user's cart
+  // 8️⃣ clear cart
   await Cart.findOneAndDelete({ user: userId });
 
-  // 9) respond with full summary
+  // 9️⃣ respond
   res.status(201).json({
     status: "success",
     data: {
       order: orderDoc,
       summary: {
-        totalBefore,
-        totalAfterDiscount: Number(totalAfterItemsAndCartOffers),
-        totalDiscount: Number(totalDiscount) || 0,
+        totalBefore: totalBeforeDiscount,
+        totalAfterDiscount,
+        totalDiscount,
         discountDetails,
         shippingPrice,
-        finalTotal,
-      },
-    },
+        finalTotal
+      }
+    }
   });
 });
+
 
 // =================== Get user's orders ===================
 exports.getMyOrders = asyncHandler(async (req, res, next) => {
