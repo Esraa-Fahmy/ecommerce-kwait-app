@@ -16,7 +16,7 @@ router.put("/:id/cancel", auth.allowedTo("user"),  orderController.cancelOrderBy
 // admin endpoints
 router.get("/all", auth.allowedTo("admin"), orderController.adminGetAllOrders);
 router.put("/:id/status", auth.allowedTo("admin"), orderController.adminUpdateOrderStatus);
-router.put("/bulk-status", auth.allowedTo("admin"), bulkUpdateOrderStatus);
+router.put("/bulk-status", auth.allowedTo("admin"), orderController.bulkUpdateOrderStatus);
 
 
 module.exports = router;
