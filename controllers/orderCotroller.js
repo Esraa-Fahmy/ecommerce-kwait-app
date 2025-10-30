@@ -1,415 +1,213 @@
 // controllers/orderController.js
 const asyncHandler = require("express-async-handler");
 const ApiError = require("../utils/apiError");
-const Cart = require("../models/cartModel");            // انت كنت بتستخدم هذا الاسم
 const Order = require("../models/orderModel");
-const Product = require("../models/product.model");
+const Cart = require("../models/cartModel");
 const Offer = require("../models/offer.model");
-const Shipping = require("../models/shippingModel");   // لو عندك file اسم مختلف عدّلي المسار
-const mongoose = require("mongoose");
+const User = require("../models/user.model");
+const Product = require("../models/product.model");
+const Address = require("../models/addressModel");
+const Shipping = require("../models/shippingModel");
 
-/**
- * Helpers:
- *  - applyBestItemOffer(itemProduct, qty) => { priceAfterOffer, appliedOffer || null, amountSaved }
- *  - chooseBestCartCoupon(total, couponOffer, cartOffers) => applies coupon or cartDiscount (the best single cart-level discount)
- */
 
-const applyBestItemOffer = async (product, qty) => {
-  // product is populated document
-  const now = new Date();
-  const offers = await Offer.find({
-    isActive: true,
-    startDate: { $lte: now },
-    endDate: { $gte: now },
-    $or: [
-      { targetType: "product", targetIds: product._id },
-      { targetType: "subcategory", targetIds: product.subCategory },
-      { targetType: "subSubcategory", targetIds: product.subSubCategory },
-      { targetType: "category", targetIds: product.category },
-    ],
-  }).sort({ priority: -1, createdAt: -1 });
+// 🧮 Helper: حساب الإجماليات مع التحقق من صلاحية العروض
+const calculateOrderTotals = async (cart, offerCode) => {
+  let discountValue = 0;
+  let totalPrice = 0;
 
-  const basePrice = Number(product.price) || 0;
-  if (!offers || offers.length === 0) {
-    return {
-      priceAfterOffer: basePrice,
-      appliedOffer: null,
-      amountSaved: 0,
-    };
-  }
+  // 🟡 حساب إجمالي السعر + تطبيق عروض المنتجات
+  for (const item of cart.cartItems) {
+    let productPrice = item.product.price;
 
-  // pick best offer among product-related offers (we'll evaluate each and pick the one giving max saving)
-  let best = {
-    priceAfterOffer: basePrice,
-    appliedOffer: null,
-    amountSaved: 0,
-  };
-
-  for (const off of offers) {
-    let candidatePrice = basePrice;
-
-    if (off.offerType === "percentage" && typeof off.discountValue === "number") {
-      candidatePrice = basePrice - (basePrice * off.discountValue) / 100;
-    } else if (off.offerType === "fixed" && typeof off.discountValue === "number") {
-      candidatePrice = basePrice - off.discountValue;
-    } else if (off.offerType === "buyXgetY" && typeof off.buyQuantity === "number" && typeof off.getQuantity === "number") {
-      // translate buyXgetY into effective unit price:
-      if (qty >= off.buyQuantity) {
-        const group = off.buyQuantity + off.getQuantity;
-        const freeGroups = Math.floor(qty / group);
-        const freeItems = freeGroups * off.getQuantity;
-        const paidItems = qty - freeItems;
-        candidatePrice = paidItems > 0 ? (paidItems * basePrice) / qty : 0;
-      }
-    } else if (off.offerType === "freeShipping") {
-      // freeShipping doesn't change item price
-      candidatePrice = basePrice;
-    }
-
-    if (isNaN(candidatePrice) || candidatePrice < 0) candidatePrice = 0;
-
-    const saved = (basePrice - candidatePrice) * qty;
-    if (saved > best.amountSaved) {
-      best = {
-        priceAfterOffer: Number(candidatePrice),
-        appliedOffer: off,
-        amountSaved: saved,
-      };
-    }
-  }
-
-  return best;
-};
-
-const findActiveCartAndPopulate = async (userId) => {
-  const cart = await Cart.findOne({ user: userId }).populate({
-    path: "cartItems.product",
-    select:
-      "title price imageCover code colors sizes Material quantity category subCategory subSubCategory",
-  });
-  return cart;
-};
-
-// =================== Create Order ===================
-exports.createOrder = asyncHandler(async (req, res, next) => {
-  const userId = req.user._id;
-  const {
-    shippingAddress, // object كامل يمكن للمستخدم تعديله
-    paymentMethod,   // 'cod' أو 'card'
-    couponCode,
-    createdAtClient
-  } = req.body;
-
-  if (!paymentMethod || !["cod", "card"].includes(paymentMethod)) {
-    return next(new ApiError("Invalid payment method", 400));
-  }
-
-  // 1️⃣ load cart
-  const cart = await findActiveCartAndPopulate(userId);
-  if (!cart || !cart.cartItems.length) {
-    return next(new ApiError("Cart is empty", 400));
-  }
-
-  // 2️⃣ build order items + apply item-level offers
-  let totalBeforeDiscount = 0;
-  let subtotalAfterItemOffers = 0;
-  let discountDetails = [];
-  const itemsForOrder = [];
-
-  for (const cartItem of cart.cartItems) {
-    const prod = cartItem.product;
-    if (!prod) continue;
-
-    // stock check
-    if (prod.quantity < cartItem.quantity) {
-      return next(new ApiError(`Only ${prod.quantity} units available for ${prod.title}`, 400));
-    }
-
-    const qty = Number(cartItem.quantity || 1);
-    const basePrice = Number(prod.price) || 0;
-    totalBeforeDiscount += basePrice * qty;
-
-    const best = await applyBestItemOffer(prod, qty);
-    const priceAfterOffer = Number(best.priceAfterOffer);
-    subtotalAfterItemOffers += priceAfterOffer * qty;
-
-    if (best.appliedOffer) {
-      discountDetails.push({
-        source: `offer:${best.appliedOffer._id}`,
-        type: best.appliedOffer.offerType,
-        value: best.appliedOffer.discountValue ?? null,
-        amount: Number((basePrice - priceAfterOffer) * qty),
-      });
-    }
-
-    // snapshot of item
-    const selectedAttributes = {};
-    if (cartItem.color) selectedAttributes.color = cartItem.color;
-    if (cartItem.size) selectedAttributes.size = cartItem.size;
-    if (cartItem.Material) selectedAttributes.Material = cartItem.Material;
-
-    itemsForOrder.push({
-      product: prod._id,
-      productCode: prod.code,
-      title: prod.title,
-      description: prod.description || "",
-      imageCover: prod.imageCover || "",
-      selectedAttributes,
-      quantity: qty,
-      price: basePrice,
-      priceAfterOffer,
-    });
-  }
-
-  // 3️⃣ shipping
-  let shippingPrice = 0;
-  if (shippingAddress && shippingAddress.city) {
-    const cityDoc = await Shipping.findOne({ city: shippingAddress.city });
-    if (cityDoc) shippingPrice = Number(cityDoc.cost || 0);
-  }
-
-  // 4️⃣ apply cart-level freeShipping
-  const now = new Date();
-  const activeOffers = await Offer.find({ isActive: true, startDate: { $lte: now }, endDate: { $gte: now } });
-  for (const off of activeOffers) {
-    if (off.offerType === "freeShipping") {
-      if (!off.minCartValue || subtotalAfterItemOffers >= off.minCartValue) {
-        shippingPrice = 0;
-        discountDetails.push({
-          source: `offer:${off._id}`,
-          type: "freeShipping",
-          value: null,
-          amount: 0
-        });
-        break;
+    // ✅ لو فيه عرض خاص بالمنتج
+    if (item.product.offer && item.product.offer.isActive) {
+      const now = new Date();
+      if (
+        item.product.offer.startDate <= now &&
+        item.product.offer.endDate >= now
+      ) {
+        if (item.product.offer.offerType === "percentage") {
+          const discount = (productPrice * item.product.offer.discountValue) / 100;
+          productPrice -= discount;
+        } else if (item.product.offer.offerType === "fixed") {
+          productPrice -= item.product.offer.discountValue;
+        }
       }
     }
+
+    totalPrice += productPrice * item.quantity;
   }
 
-  // 5️⃣ coupon
-  let totalAfterDiscount = subtotalAfterItemOffers;
-  let totalDiscount = 0;
-  let couponApplied = null;
+  // ✅ تطبيق كود الخصم (offerCode)
+  if (offerCode) {
+    const offer = await Offer.findOne({ code: offerCode });
 
-  if (couponCode) {
-    const coupon = activeOffers.find(o => o.offerType === "coupon" && o.couponCode?.toLowerCase() === couponCode.toLowerCase());
-    if (!coupon) return next(new ApiError("Invalid or expired coupon", 400));
+    // ❌ لو الكوبون مش موجود
+    if (!offer) throw new ApiError("Invalid or expired offer code", 400);
 
-    if (coupon.minCartValue && subtotalAfterItemOffers < coupon.minCartValue) {
-      return next(new ApiError(`Coupon requires minimum cart value ${coupon.minCartValue}`, 400));
+    // ❌ لو العرض انتهى أو غير نشط
+    const now = new Date();
+    if (!offer.isActive || offer.endDate < now) {
+      throw new ApiError("This offer has expired", 400);
     }
 
-    let couponAmount = 0;
-    if (coupon.discountValue != null) {
-      couponAmount = coupon.discountValue < 1 ? subtotalAfterItemOffers * coupon.discountValue : coupon.discountValue;
+    // ✅ تطبيق الخصم
+    if (offer.offerType === "percentage") {
+      discountValue = (totalPrice * offer.discountValue) / 100;
+    } else if (offer.offerType === "fixed") {
+      discountValue = offer.discountValue;
     }
-
-    couponApplied = coupon;
-    totalAfterDiscount -= couponAmount;
-    if (totalAfterDiscount < 0) totalAfterDiscount = 0;
-    totalDiscount = subtotalAfterItemOffers - totalAfterDiscount;
-
-    discountDetails.push({
-      source: `coupon:${coupon.couponCode}`,
-      type: coupon.discountValue < 1 ? "percentage" : "fixed",
-      value: coupon.discountValue,
-      amount: Number(totalDiscount),
-    });
   }
 
-  // 6️⃣ final total
-  const finalTotal = totalAfterDiscount + shippingPrice;
+  const totalAfterDiscount = Math.max(totalPrice - discountValue, 0);
+  const shippingPrice = totalAfterDiscount > 500 ? 0 : 30; // مثال بسيط
+  const totalOrderPrice = totalAfterDiscount + shippingPrice;
 
-  // 7️⃣ create order
-  const orderDoc = await Order.create({
-    user: userId,
-    items: itemsForOrder,
-    shippingAddress, // خليه object كامل، المستخدم يقدر يعدل أي حقل
-    paymentMethod,
+  return {
+    totalPrice,
+    discountValue,
     shippingPrice,
-    coupon: couponApplied ? {
-      code: couponApplied.couponCode,
-      discountType: couponApplied.discountValue < 1 ? "percentage" : "fixed",
-      discountValue: couponApplied.discountValue
-    } : undefined,
-    totalBeforeDiscount,
-    totalDiscount,
-    totalAfterDiscount,
-    discountDetails,
-    status: "pending",
-    createdAtClient: createdAtClient ? new Date(createdAtClient) : undefined,
+    totalOrderPrice,
+  };
+};
+
+//
+// =============================
+// 🧾 PREVIEW ORDER (قبل الإنشاء)
+// =============================
+exports.previewOrder = asyncHandler(async (req, res, next) => {
+  const { cartId, offerCode } = req.body;
+  const cart = await Cart.findById(cartId).populate("cartItems.product");
+
+  if (!cart) return next(new ApiError("Cart not found", 404));
+
+  const totals = await calculateOrderTotals(cart, offerCode);
+
+  res.status(200).json({
+    message: "Order preview calculated successfully",
+    data: {
+      products: cart.cartItems,
+      ...totals,
+    },
+  });
+});
+
+//
+// =============================
+// ✅ CREATE ORDER
+// =============================
+exports.createOrder = asyncHandler(async (req, res, next) => {
+  const { cartId, addressId, paymentMethod = "cod", offerCode } = req.body;
+
+  const cart = await Cart.findById(cartId).populate("cartItems.product");
+  if (!cart) return next(new ApiError("Cart not found", 404));
+
+  const address = await Address.findOne({ _id: addressId, user: req.user._id });
+  if (!address) return next(new ApiError("Address not found", 404));
+
+  const shipping = await Shipping.findOne({ city: address.city });
+  const shippingCost = shipping ? shipping.cost : 0;
+
+  const totals = await calculateOrderTotals(cart, offerCode);
+
+  // ✳️ إنشاء الأوردر
+  const order = await Order.create({
+    user: req.user._id,
+    cart: cart._id,
+    cartItems: cart.cartItems,
+    address,
+    paymentMethod,
+    subtotal: totals.totalPrice,
+    discountValue: totals.discountValue,
+    shippingCost: totals.shippingPrice || shippingCost,
+    total: totals.totalOrderPrice,
+    offerCode,
   });
 
-  // 8️⃣ clear cart
-  await Cart.findOneAndDelete({ user: userId });
+  // 🔄 تعديل الكميات في المنتجات
+  for (const item of cart.cartItems) {
+    await Product.findByIdAndUpdate(item.product._id, {
+      $inc: { quantity: -item.quantity, sold: item.quantity },
+    });
+  }
 
-  // 9️⃣ respond
+  // 🧹 حذف الكارت بعد الإنشاء
+  await Cart.findByIdAndDelete(cart._id);
+
   res.status(201).json({
     status: "success",
-    data: {
-      order: orderDoc,
-      summary: {
-        totalBefore: totalBeforeDiscount,
-        totalAfterDiscount,
-        totalDiscount,
-        discountDetails,
-        shippingPrice,
-        finalTotal
-      }
-    }
+    message: "Order created successfully",
+    data: order,
   });
 });
 
-
-// =================== Get user's orders ===================
-exports.getMyOrders = asyncHandler(async (req, res, next) => {
-  const userId = req.user._id;
-  const { status, q, page = 1, limit = 20 } = req.query;
-
-  const filter = { user: userId };
-  if (status) filter.status = status;
-  if (q) {
-    // simple search on product title or order id
-    const regex = new RegExp(q, "i");
-    filter.$or = [
-      { "items.title": regex },
-      { _id: mongoose.Types.ObjectId.isValid(q) ? mongoose.Types.ObjectId(q) : null },
-    ];
-  }
-
-  const skip = (page - 1) * limit;
-  const orders = await Order.find(filter).sort({ createdAt: -1 }).skip(skip).limit(Number(limit));
-  const total = await Order.countDocuments(filter);
-
-  res.status(200).json({ status: "success", total, results: orders.length, data: orders });
+//
+// =============================
+// 📋 GET USER ORDERS
+// =============================
+exports.getUserOrders = asyncHandler(async (req, res) => {
+  const orders = await Order.find({ user: req.user._id }).sort({ createdAt: -1 });
+  res.status(200).json({ results: orders.length, data: orders });
 });
 
-// =================== Get single order (owner or admin) ===================
-exports.getOrderById = asyncHandler(async (req, res, next) => {
-  const id = req.params.id;
-  if (!mongoose.Types.ObjectId.isValid(id)) return next(new ApiError("Invalid order id", 400));
+//
+// =============================
+// 📋 GET ALL ORDERS (Admin)
+// =============================
+exports.getAllOrders = asyncHandler(async (req, res) => {
+  const orders = await Order.find()
+    .populate("user", "name email")
+    .sort({ createdAt: -1 });
+  res.status(200).json({ results: orders.length, data: orders });
+});
+
+//
+// =============================
+// 🧾 GET SINGLE ORDER
+// =============================
+exports.getOrder = asyncHandler(async (req, res, next) => {
+  const order = await Order.findById(req.params.id).populate("user", "name email");
+  if (!order) return next(new ApiError("Order not found", 404));
+  res.status(200).json({ data: order });
+});
+
+//
+// =============================
+// ✏️ UPDATE ORDER STATUS (Admin)
+// =============================
+exports.updateOrderStatus = asyncHandler(async (req, res, next) => {
+  const { id } = req.params;
+  const { status } = req.body;
 
   const order = await Order.findById(id);
   if (!order) return next(new ApiError("Order not found", 404));
 
-  // allow owner or admin (caller middleware should fill req.user)
-  if (order.user.toString() !== req.user._id.toString() && req.user.role !== "admin") {
-    return next(new ApiError("You are not allowed to access this order", 403));
+  // 🚫 منع تعديل حالة أوردر تم إلغاؤه
+  if (["cancelled_by_user", "cancelled_by_admin"].includes(order.status)) {
+    return next(new ApiError("Cannot update a cancelled order", 400));
   }
 
-  res.status(200).json({ status: "success", data: order });
+  order.status = status;
+  await order.save();
+
+  res.status(200).json({ message: "Order status updated", data: order });
 });
 
-// =================== User cancel order (only when pending) ===================
-exports.cancelOrderByUser = asyncHandler(async (req, res, next) => {
-  const id = req.params.id;
-  const order = await Order.findById(id);
+//
+// =============================
+// ❌ CANCEL ORDER (User)
+// =============================
+exports.cancelOrder = asyncHandler(async (req, res, next) => {
+  const { id } = req.params;
+  const order = await Order.findOne({ _id: id, user: req.user._id });
   if (!order) return next(new ApiError("Order not found", 404));
-  if (order.user.toString() !== req.user._id.toString()) return next(new ApiError("Not allowed", 403));
-  if (order.status !== "pending") return next(new ApiError("You can cancel order only when it's pending", 400));
+
+  if (order.status !== "pending") {
+    return next(new ApiError("You can only cancel pending orders", 400));
+  }
 
   order.status = "cancelled_by_user";
   await order.save();
 
-  res.status(200).json({ status: "success", message: "Order cancelled", data: order });
-});
-
-// =================== Admin: get all orders (filter/search) ===================
-exports.adminGetAllOrders = asyncHandler(async (req, res, next) => {
-  const { status, q, page = 1, limit = 30 } = req.query;
-  const filter = {};
-  if (status) filter.status = status;
-  if (q) filter.$or = [{ _id: mongoose.Types.ObjectId.isValid(q) ? mongoose.Types.ObjectId(q) : null }, { "items.title": new RegExp(q, "i") }];
-
-  const skip = (page - 1) * limit;
-  const orders = await Order.find(filter).sort({ createdAt: -1 }).skip(skip).limit(Number(limit));
-  const total = await Order.countDocuments(filter);
-
-  res.status(200).json({ status: "success", total, results: orders.length, data: orders });
-});
-
-// =================== Admin: update order status ===================
-/**
- * body: { status: 'confirmed' | 'in_preparation' | 'out_for_delivery' | 'delivered' | 'rejected' | 'returned' | ... }
- *
- * Business rule:
- *  - if order.status === 'cancelled_by_user' and admin tries to confirm -> reject action
- *  - when status -> 'delivered' : decrement stock and increment sold
- */
-exports.adminUpdateOrderStatus = asyncHandler(async (req, res, next) => {
-  const { id } = req.params;
-  const { status } = req.body;
-
-  if (!status) return next(new ApiError("Status is required", 400));
-  const allowed = ['pending','confirmed','in_preparation','out_for_delivery','delivered','cancelled_by_user','rejected','returned','refunded','delivery_failed'];
-  if (!allowed.includes(status)) return next(new ApiError("Invalid status", 400));
-
-  const order = await Order.findById(id);
-  if (!order) return next(new ApiError("Order not found", 404));
-
-  // cannot confirm if user already cancelled
-  if (order.status === "cancelled_by_user" && status === "confirmed") {
-    return next(new ApiError("Cannot confirm an order cancelled by user", 400));
-  }
-
-  // update status
-  order.status = status;
-
-  // if delivered -> adjust stock
-  if (status === "delivered") {
-    for (const item of order.items) {
-      const prod = await Product.findById(item.product);
-      if (!prod) continue;
-      const soldQty = Number(item.quantity || 0);
-      // decrement stock, increment sold
-      prod.quantity = Math.max(0, (Number(prod.quantity || 0) - soldQty));
-      prod.sold = Number(prod.sold || 0) + soldQty;
-      await prod.save();
-    }
-  }
-
-  await order.save();
-  res.status(200).json({ status: "success", message: "Order status updated", data: order });
-});
-
-
-
-exports.bulkUpdateOrderStatus = asyncHandler(async (req, res, next) => {
-  const { orderIds, newStatus } = req.body;
-
-  if (!Array.isArray(orderIds) || !orderIds.length)
-    return next(new ApiError("Order IDs are required", 400));
-
-  if (!newStatus)
-    return next(new ApiError("New status is required", 400));
-
-  const orders = await Order.find({ _id: { $in: orderIds } });
-  if (!orders.length) return next(new ApiError("No matching orders found", 404));
-
-  let updatedCount = 0;
-  for (const order of orders) {
-    if (order.status === "cancelled_by_user") continue;
-
-    order.status = newStatus;
-
-    // ⬇️ تقليل المخزون لو الحالة delivered
-    if (newStatus === "delivered") {
-      for (const item of order.items) {
-        const prod = await Product.findById(item.product);
-        if (!prod) continue;
-        const soldQty = Number(item.quantity || 0);
-        prod.quantity = Math.max(0, (prod.quantity || 0) - soldQty);
-        prod.sold = (prod.sold || 0) + soldQty;
-        await prod.save();
-      }
-    }
-
-    await order.save();
-    updatedCount++;
-  }
-
-  res.status(200).json({
-    status: "success",
-    message: `${updatedCount} orders updated successfully`,
-  });
+  res.status(200).json({ message: "Order cancelled successfully", data: order });
 });

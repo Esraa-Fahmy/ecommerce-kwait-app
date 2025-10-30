@@ -1,22 +1,48 @@
-// routes/order.route.js
 const express = require("express");
+const {
+  previewOrder,
+  createOrder,
+  getUserOrders,
+  getAllOrders,
+  getOrder,
+  updateOrderStatus,
+  cancelOrder,
+} = require("../controllers/orderCotroller");
+
+const { protect, allowedTo } = require("../controllers/auth.controller");
+
 const router = express.Router();
-const orderController = require("../controllers/orderCotroller");
-const auth = require("../controllers/auth.controller");
 
-// جميع الراوتس محمية
-router.use(auth.protect);
+// =============================
+// 🧾 Preview Order (قبل الإنشاء)
+// =============================
+// ⬅️ المستخدم يراجع السعر قبل ما يعمل الطلب
+router.post("/preview",  protect, allowedTo("user"), previewOrder);
 
-// user endpoints
-router.post("/", auth.allowedTo("user"), orderController.createOrder);             // create order from cart
-router.get("/", auth.allowedTo("user"), orderController.getMyOrders);              // get my orders (with optional ?status=&q=)
-router.get("/:id",  orderController.getOrderById);          // get single order
-router.put("/:id/cancel", auth.allowedTo("user"),  orderController.cancelOrderByUser); // user cancel (only pending)
+// =============================
+// ✅ Create Order (إنشاء أوردر جديد)
+// =============================
+router.post("/",  protect, allowedTo("user"), createOrder);
 
-// admin endpoints
-router.get("/all", auth.allowedTo("admin"), orderController.adminGetAllOrders);
-router.put("/:id/status", auth.allowedTo("admin"), orderController.adminUpdateOrderStatus);
-router.put("/bulk-status", auth.allowedTo("admin"), orderController.bulkUpdateOrderStatus);
+// =============================
+// 📋 Get User Orders (كل أوردرات المستخدم)
+// =============================
+router.get("/my-orders", protect, allowedTo("user"), getUserOrders);
 
+// =============================
+// ❌ Cancel Order (إلغاء أوردر)
+// =============================
+router.put("/cancel/:id",protect, allowedTo("user"), cancelOrder);
+
+// =============================
+// 🧾 Get Single Order (تفاصيل أوردر واحد)
+// =============================
+router.get("/:id", protect, getOrder);
+
+// =============================
+// 🛠 Admin Routes (إدارة الأوردرات)
+// =============================
+router.get("/", protect, allowedTo("admin"), getAllOrders);
+router.put("/:id/status", protect, allowedTo("admin"), updateOrderStatus);
 
 module.exports = router;
