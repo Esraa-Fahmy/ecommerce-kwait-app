@@ -8,7 +8,7 @@ const Auth = require('../controllers/auth.controller');
 router.post('/', Auth.protect, Auth.allowedTo("user"), createRatingValidator, reviewController.addProductRating);
 
 // 📄 جلب كل التقييمات لمنتج معين
-router.get('/:productId', Auth.protect, reviewController.getProductRatings);
+router.get('/:productId',  reviewController.getProductRatings);
 
 // ✏️ تعديل تقييم
 router.put('/:id', Auth.protect, Auth.allowedTo("user"), reviewController.updateReview);
