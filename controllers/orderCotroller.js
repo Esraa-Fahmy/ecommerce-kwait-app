@@ -140,7 +140,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
     coupon,
   });
 
-  order = await order.populate("user", "firstName lastName email phone");
+  order = await Order.populate("user", "firstName lastName email phone");
 
   // 🔄 تعديل الكميات في المنتجات
   for (const item of cart.cartItems) {
