@@ -76,12 +76,12 @@ const calculateOrderTotals = async (cart, offerCode) => {
 // 🧾 PREVIEW ORDER (قبل الإنشاء)
 // =============================
 exports.previewOrder = asyncHandler(async (req, res, next) => {
-  const { cartId, offerCode } = req.body;
+  const { cartId, coupon } = req.body;
   const cart = await Cart.findById(cartId).populate("cartItems.product");
 
   if (!cart) return next(new ApiError("Cart not found", 404));
 
-  const totals = await calculateOrderTotals(cart, offerCode);
+  const totals = await calculateOrderTotals(cart, coupon);
 
   res.status(200).json({
     message: "Order preview calculated successfully",
@@ -97,7 +97,7 @@ exports.previewOrder = asyncHandler(async (req, res, next) => {
 // ✅ CREATE ORDER
 // =============================
 exports.createOrder = asyncHandler(async (req, res, next) => {
-  const { cartId, addressId, paymentMethod = "cod", offerCode } = req.body;
+  const { cartId, addressId, paymentMethod = "cod", coupon } = req.body;
 
   const cart = await Cart.findById(cartId).populate("cartItems.product");
   if (!cart) return next(new ApiError("Cart not found", 404));
@@ -108,7 +108,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
   const shipping = await Shipping.findOne({ city: address.city });
   const shippingCost = shipping ? shipping.cost : 0;
 
-  const totals = await calculateOrderTotals(cart, offerCode);
+  const totals = await calculateOrderTotals(cart, coupon);
 
   // ✳️ إنشاء الأوردر
   const order = await Order.create({
@@ -121,7 +121,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
     discountValue: totals.discountValue,
     shippingCost: totals.shippingPrice || shippingCost,
     total: totals.totalOrderPrice,
-    offerCode,
+    coupon,
   });
 
   // 🔄 تعديل الكميات في المنتجات
