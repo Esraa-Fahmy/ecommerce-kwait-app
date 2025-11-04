@@ -39,33 +39,37 @@ const calculateOrderTotals = async (cart, coupon, user) => {
   }
 
   // ✅ تطبيق كود الخصم (الكوبون)
-  if (coupon) {
-    const offer = await Offer.findOne({ couponCode: coupon });
+ // ✅ تطبيق كود الخصم (الكوبون)
+if (coupon) {
+  const offer = await Offer.findOne({ couponCode: coupon });
+  const now = new Date();
 
-    const now = new Date();
-
-    if (!offer) {
-      couponMessage = "❌ هذا الكود غير صحيح أو غير موجود.";
-    } else if (!offer.isActive) {
-      couponMessage = "⚠️ هذا الكود غير مفعل حالياً.";
-    } else if (offer.startDate > now) {
-      couponMessage = "⚠️ هذا الكود لم يبدأ بعد.";
-    } else if (offer.endDate < now) {
-      couponMessage = "⚠️ انتهت صلاحية هذا الكود.";
-    } else if (offer.userGroup === "newUser" && user.createdAt < new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)) {
-      // مثال: نعتبر "newUser" لو الحساب عمره أقل من 7 أيام
-      couponMessage = "⚠️ هذا الكود مخصص للمستخدمين الجدد فقط.";
+  if (!offer) {
+    couponMessage = "❌ هذا الكود غير صحيح أو غير موجود.";
+  } else if (!offer.isActive) {
+    couponMessage = "⚠️ هذا الكود غير مفعل حالياً.";
+  } else if (offer.startDate > now) {
+    couponMessage = "⚠️ هذا الكود لم يبدأ بعد.";
+  } else if (offer.endDate < now) {
+    couponMessage = "⚠️ انتهت صلاحية هذا الكود.";
+  } else if (offer.targetType !== "cart") {
+    couponMessage = "⚠️ هذا الكود غير مخصص لتطبيقه على السلة.";
+  } else {
+    // ✅ الكود صالح ومخصص للسلة
+    if (offer.offerType === "coupon" || offer.offerType === "percentage") {
+      // لو الخصم نسبة
+      discountValue = totalPrice * offer.discountValue;
+      couponMessage = `✅ تم تطبيق خصم بنسبة ${(offer.discountValue * 100).toFixed(0)}%.`;
+    } else if (offer.offerType === "fixed") {
+      // لو خصم ثابت
+      discountValue = offer.discountValue;
+      couponMessage = `✅ تم تطبيق خصم بقيمة ${offer.discountValue} ج.م.`;
     } else {
-      // ✅ الكود صالح، نطبّق الخصم
-      if (offer.offerType === "percentage") {
-        discountValue = totalPrice * offer.discountValue; // لو offer.discountValue = 0.1 يبقى خصم 10%
-        couponMessage = `✅ تم تطبيق خصم بنسبة ${(offer.discountValue * 100).toFixed(0)}%.`;
-      } else if (offer.offerType === "fixed") {
-        discountValue = offer.discountValue;
-        couponMessage = `✅ تم تطبيق خصم بقيمة ${offer.discountValue} ج.م.`;
-      }
+      couponMessage = "⚠️ نوع العرض غير مدعوم لهذا الكوبون.";
     }
   }
+}
+
 
   const totalAfterDiscount = Math.max(totalPrice - discountValue, 0);
   const shippingPrice = totalAfterDiscount > 500 ? 0 : 30; // مثال بسيط
