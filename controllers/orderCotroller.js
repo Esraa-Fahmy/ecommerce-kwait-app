@@ -11,7 +11,7 @@ const Shipping = require("../models/shippingModel");
 
 
 // 🧮 Helper: حساب الإجماليات مع التحقق من صلاحية العروض
-const calculateOrderTotals = async (cart, offerCode) => {
+const calculateOrderTotals = async (cart, coupon) => {
   let discountValue = 0;
   let totalPrice = 0;
 
@@ -40,7 +40,7 @@ const calculateOrderTotals = async (cart, offerCode) => {
 
   // ✅ تطبيق كود الخصم (offerCode)
   if (offerCode) {
-    const offer = await Offer.findOne({ code: offerCode });
+    const offer = await Offer.findOne({ couponCode: coupon });
 
     // ❌ لو الكوبون مش موجود
     if (!offer) throw new ApiError("Invalid or expired offer code", 400);
