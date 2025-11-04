@@ -1,25 +1,25 @@
-// controllers/orderController.js
 const asyncHandler = require("express-async-handler");
 const ApiError = require("../utils/apiError");
 const Order = require("../models/orderModel");
 const Cart = require("../models/cartModel");
 const Offer = require("../models/offer.model");
-const User = require("../models/user.model");
 const Product = require("../models/product.model");
 const Address = require("../models/addressModel");
 const Shipping = require("../models/shippingModel");
+const User = require("../models/user.model");
 
 
-// 🧮 Helper: حساب الإجماليات مع التحقق من صلاحية العروض
-const calculateOrderTotals = async (cart, coupon) => {
+// 🧮 Helper: حساب الإجماليات + الخصومات + الكوبونات
+const calculateOrderTotals = async (cart, coupon, user) => {
   let discountValue = 0;
   let totalPrice = 0;
+  let couponMessage = null;
 
   // 🟡 حساب إجمالي السعر + تطبيق عروض المنتجات
   for (const item of cart.cartItems) {
     let productPrice = item.product.price;
 
-    // ✅ لو فيه عرض خاص بالمنتج
+    // ✅ لو فيه عرض على المنتج
     if (item.product.offer && item.product.offer.isActive) {
       const now = new Date();
       if (
@@ -38,24 +38,32 @@ const calculateOrderTotals = async (cart, coupon) => {
     totalPrice += productPrice * item.quantity;
   }
 
-  // ✅ تطبيق كود الخصم (offerCode)
-  if (offerCode) {
+  // ✅ تطبيق كود الخصم (الكوبون)
+  if (coupon) {
     const offer = await Offer.findOne({ couponCode: coupon });
 
-    // ❌ لو الكوبون مش موجود
-    if (!offer) throw new ApiError("Invalid or expired offer code", 400);
-
-    // ❌ لو العرض انتهى أو غير نشط
     const now = new Date();
-    if (!offer.isActive || offer.endDate < now) {
-      throw new ApiError("This offer has expired", 400);
-    }
 
-    // ✅ تطبيق الخصم
-    if (offer.offerType === "percentage") {
-      discountValue = (totalPrice * offer.discountValue) / 100;
-    } else if (offer.offerType === "fixed") {
-      discountValue = offer.discountValue;
+    if (!offer) {
+      couponMessage = "❌ هذا الكود غير صحيح أو غير موجود.";
+    } else if (!offer.isActive) {
+      couponMessage = "⚠️ هذا الكود غير مفعل حالياً.";
+    } else if (offer.startDate > now) {
+      couponMessage = "⚠️ هذا الكود لم يبدأ بعد.";
+    } else if (offer.endDate < now) {
+      couponMessage = "⚠️ انتهت صلاحية هذا الكود.";
+    } else if (offer.userGroup === "newUser" && user.createdAt < new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)) {
+      // مثال: نعتبر "newUser" لو الحساب عمره أقل من 7 أيام
+      couponMessage = "⚠️ هذا الكود مخصص للمستخدمين الجدد فقط.";
+    } else {
+      // ✅ الكود صالح، نطبّق الخصم
+      if (offer.offerType === "percentage") {
+        discountValue = totalPrice * offer.discountValue; // لو offer.discountValue = 0.1 يبقى خصم 10%
+        couponMessage = `✅ تم تطبيق خصم بنسبة ${(offer.discountValue * 100).toFixed(0)}%.`;
+      } else if (offer.offerType === "fixed") {
+        discountValue = offer.discountValue;
+        couponMessage = `✅ تم تطبيق خصم بقيمة ${offer.discountValue} ج.م.`;
+      }
     }
   }
 
@@ -68,8 +76,10 @@ const calculateOrderTotals = async (cart, coupon) => {
     discountValue,
     shippingPrice,
     totalOrderPrice,
+    couponMessage,
   };
 };
+
 
 //
 // =============================
@@ -81,9 +91,10 @@ exports.previewOrder = asyncHandler(async (req, res, next) => {
 
   if (!cart) return next(new ApiError("Cart not found", 404));
 
-  const totals = await calculateOrderTotals(cart, coupon);
+  const totals = await calculateOrderTotals(cart, coupon, req.user);
 
   res.status(200).json({
+    status: "success",
     message: "Order preview calculated successfully",
     data: {
       products: cart.cartItems,
@@ -91,6 +102,7 @@ exports.previewOrder = asyncHandler(async (req, res, next) => {
     },
   });
 });
+
 
 //
 // =============================
@@ -108,7 +120,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
   const shipping = await Shipping.findOne({ city: address.city });
   const shippingCost = shipping ? shipping.cost : 0;
 
-  const totals = await calculateOrderTotals(cart, coupon);
+  const totals = await calculateOrderTotals(cart, coupon, req.user);
 
   // ✳️ إنشاء الأوردر
   const order = await Order.create({
@@ -136,10 +148,11 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
 
   res.status(201).json({
     status: "success",
-    message: "Order created successfully",
+    message: totals.couponMessage || "Order created successfully",
     data: order,
   });
 });
+
 
 //
 // =============================
@@ -149,6 +162,7 @@ exports.getUserOrders = asyncHandler(async (req, res) => {
   const orders = await Order.find({ user: req.user._id }).sort({ createdAt: -1 });
   res.status(200).json({ results: orders.length, data: orders });
 });
+
 
 //
 // =============================
@@ -161,6 +175,7 @@ exports.getAllOrders = asyncHandler(async (req, res) => {
   res.status(200).json({ results: orders.length, data: orders });
 });
 
+
 //
 // =============================
 // 🧾 GET SINGLE ORDER
@@ -170,6 +185,7 @@ exports.getOrder = asyncHandler(async (req, res, next) => {
   if (!order) return next(new ApiError("Order not found", 404));
   res.status(200).json({ data: order });
 });
+
 
 //
 // =============================
@@ -182,7 +198,6 @@ exports.updateOrderStatus = asyncHandler(async (req, res, next) => {
   const order = await Order.findById(id);
   if (!order) return next(new ApiError("Order not found", 404));
 
-  // 🚫 منع تعديل حالة أوردر تم إلغاؤه
   if (["cancelled_by_user", "cancelled_by_admin"].includes(order.status)) {
     return next(new ApiError("Cannot update a cancelled order", 400));
   }
@@ -192,6 +207,7 @@ exports.updateOrderStatus = asyncHandler(async (req, res, next) => {
 
   res.status(200).json({ message: "Order status updated", data: order });
 });
+
 
 //
 // =============================
