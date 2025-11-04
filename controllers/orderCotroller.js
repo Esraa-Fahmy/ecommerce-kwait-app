@@ -140,6 +140,8 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
     coupon,
   });
 
+  order = await order.populate("user", "fullName email phone");
+
   // 🔄 تعديل الكميات في المنتجات
   for (const item of cart.cartItems) {
     await Product.findByIdAndUpdate(item.product._id, {
@@ -163,7 +165,9 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
 // 📋 GET USER ORDERS
 // =============================
 exports.getUserOrders = asyncHandler(async (req, res) => {
-  const orders = await Order.find({ user: req.user._id }).sort({ createdAt: -1 });
+  const orders = await Order.find({ user: req.user._id })
+    .populate("user", "fullName email phone")
+    .sort({ createdAt: -1 });
   res.status(200).json({ results: orders.length, data: orders });
 });
 
@@ -174,7 +178,7 @@ exports.getUserOrders = asyncHandler(async (req, res) => {
 // =============================
 exports.getAllOrders = asyncHandler(async (req, res) => {
   const orders = await Order.find()
-    .populate("user", "name email")
+    .populate("user", "fullName email phone")
     .sort({ createdAt: -1 });
   res.status(200).json({ results: orders.length, data: orders });
 });
@@ -185,7 +189,8 @@ exports.getAllOrders = asyncHandler(async (req, res) => {
 // 🧾 GET SINGLE ORDER
 // =============================
 exports.getOrder = asyncHandler(async (req, res, next) => {
-  const order = await Order.findById(req.params.id).populate("user", "name email");
+  const order = await Order.findById(req.params.id).populate("user", "fullName email phone");
+
   if (!order) return next(new ApiError("Order not found", 404));
   res.status(200).json({ data: order });
 });
