@@ -8,53 +8,43 @@ const { uploadMixOfImages } = require('../middlewares/uploadImageMiddleWare');
 const User = require("../models/user.model");
 const cartModel = require("../models/cartModel");
 
-
 exports.uploadProductImages = uploadMixOfImages([
-    { name: 'imageCover', maxCount: 1 },
-    { name: 'images', maxCount: 10 }
+  { name: 'imageCover', maxCount: 1 },
+  { name: 'images', maxCount: 10 }
 ]);
 
-
 exports.resizeProductImages = asyncHandler(async (req, res, next) => {
-    if (req.files.imageCover) {
-        const imageCoverFileName = `product-${uuidv4()}-${Date.now()}-cover.jpeg`;
+  if (req.files.imageCover) {
+    const imageCoverFileName = `product-${uuidv4()}-${Date.now()}-cover.jpeg`;
+    const path = "uploads/products/";
+    if (!fs.existsSync(path)) fs.mkdirSync(path, { recursive: true });
+    await sharp(req.files.imageCover[0].buffer)
+      .toFormat('jpeg')
+      .jpeg({ quality: 100 })
+      .toFile(`uploads/products/${imageCoverFileName}`);
+    req.body.imageCover = imageCoverFileName;
+  }
 
+  if (req.files.images) {
+    req.body.images = [];
+    await Promise.all(
+      req.files.images.map(async (img, index) => {
+        const imageName = `product-${uuidv4()}-${Date.now()}-${index + 1}.jpeg`;
         const path = "uploads/products/";
-        if (!fs.existsSync(path)) {
-            fs.mkdirSync(path, { recursive: true });
-        }
-        await sharp(req.files.imageCover[0].buffer)
-            .toFormat('jpeg')
-            .jpeg({ quality: 100 })
-            .toFile(`uploads/products/${imageCoverFileName}`);
-        req.body.imageCover = imageCoverFileName;
-    }
-    if (req.files.images) {
-        req.body.images = [];
-        await Promise.all(
-            req.files.images.map(async (img, index) => {
-                const imageName = `product-${uuidv4()}-${Date.now()}-${index + 1}.jpeg`;
-                const path = "uploads/products/";
-                if (!fs.existsSync(path)) {
-                    fs.mkdirSync(path, { recursive: true });
-                }
-                await sharp(img.buffer)
-                    .toFormat('jpeg')
-                    .jpeg({ quality: 100 })
-                    .toFile(`uploads/products/${imageName}`);
-                req.body.images.push(imageName);
-            })
-        );
-    }
-    next();
+        if (!fs.existsSync(path)) fs.mkdirSync(path, { recursive: true });
+        await sharp(img.buffer)
+          .toFormat('jpeg')
+          .jpeg({ quality: 100 })
+          .toFile(`uploads/products/${imageName}`);
+        req.body.images.push(imageName);
+      })
+    );
+  }
+  next();
 });
 
-
-
+// ============================
 // ✅ Get All Products
-// ============================
-// ============================
-// ✅ Get All Products (Optimized)
 // ============================
 exports.getAllProducts = asyncHandler(async (req, res) => {
   const page = req.query.page * 1 || 1;
@@ -87,26 +77,23 @@ exports.getAllProducts = asyncHandler(async (req, res) => {
     .limit(limit)
     .sort(sortOption);
 
-  // 🧠 هنا بنضيف حالة wishlist و cart لو المستخدم داخل
   let finalProducts = [];
 
   if (req.user) {
-    const user = await User.findById(req.user._id).select("wishlist");
+    const user = await User.findById(req.user._id)
+      .select("wishlist")
+      .populate("wishlist", "_id");
+
+    const wishlistIds = user?.wishlist?.map(p => p._id.toString()) || [];
     const cart = await cartModel.findOne({ user: req.user._id });
 
     finalProducts = products.map((p) => {
       const product = p.toObject();
+      product.isWishlist = wishlistIds.includes(p._id.toString());
 
-      // Wishlist
-      product.isWishlist = user?.wishlist?.some(
-        (id) => id.toString() === p._id.toString()
-      );
-
-      // Cart
       const cartItem = cart?.cartItems?.find(
         (item) => item.product.toString() === p._id.toString()
       );
-
       product.isCart = !!cartItem;
       product.cartQuantity = cartItem ? cartItem.quantity : 0;
 
@@ -134,12 +121,8 @@ exports.getAllProducts = asyncHandler(async (req, res) => {
   });
 });
 
-
-
-
-
 // ============================
-// ✅ Get Single Product 
+// ✅ Get Single Product
 // ============================
 exports.getSingleProduct = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
@@ -153,28 +136,23 @@ exports.getSingleProduct = asyncHandler(async (req, res, next) => {
     return next(new ApiError(`No product found for this id ${id}`, 404));
   }
 
-  // تحويل المنتج لكائن عادي عشان نقدر نضيف عليه خصائص جديدة
   let productData = product.toObject();
 
-  // 🧠 لو المستخدم داخل (auth)
   if (req.user) {
-    const user = await User.findById(req.user._id).select("wishlist");
+    const user = await User.findById(req.user._id)
+      .select("wishlist")
+      .populate("wishlist", "_id");
+    const wishlistIds = user?.wishlist?.map(p => p._id.toString()) || [];
     const cart = await cartModel.findOne({ user: req.user._id });
 
-    // ✅ check wishlist
-    productData.isWishlist = user?.wishlist?.some(
-      (pid) => pid.toString() === product._id.toString()
-    );
+    productData.isWishlist = wishlistIds.includes(product._id.toString());
 
-    // ✅ check cart
     const cartItem = cart?.cartItems?.find(
       (item) => item.product.toString() === product._id.toString()
     );
-
     productData.isCart = !!cartItem;
     productData.cartQuantity = cartItem ? cartItem.quantity : 0;
   } else {
-    // لو المستخدم مش داخل
     productData.isWishlist = false;
     productData.isCart = false;
     productData.cartQuantity = 0;
@@ -186,44 +164,29 @@ exports.getSingleProduct = asyncHandler(async (req, res, next) => {
   });
 });
 
-
-
 // ============================
-// ✅ Create Product
+// ✅ Create, Update, Delete Product
 // ============================
 exports.createProduct = asyncHandler(async (req, res) => {
   const product = await ProductModel.create(req.body);
   res.status(201).json({ data: product });
 });
 
-// ============================
-// ✅ Update Product
-// ============================
 exports.updateProduct = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
 
-  const product = await ProductModel.findByIdAndUpdate(id, req.body, {
-    new: true,
-  });
+  const product = await ProductModel.findByIdAndUpdate(id, req.body, { new: true });
 
-  if (!product) {
-    return next(new ApiError(`No product found for this id ${id}`, 404));
-  }
+  if (!product) return next(new ApiError(`No product found for this id ${id}`, 404));
 
   res.status(200).json({ data: product });
 });
 
-// ============================
-// ✅ Delete Product
-// ============================
 exports.deleteProduct = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
 
   const product = await ProductModel.findByIdAndDelete(id);
-
-  if (!product) {
-    return next(new ApiError(`No product found for this id ${id}`, 404));
-  }
+  if (!product) return next(new ApiError(`No product found for this id ${id}`, 404));
 
   res.status(200).json({ message: "Product deleted successfully" });
 });
