@@ -9,7 +9,8 @@ const Auth = require('../controllers/auth.controller');
 // ============================
 router.post(
   '/',
-  Auth.protect,            // لازم يكون مستخدم مسجل دخول
+  Auth.protect,    
+   Auth.allowedTo("user"),        // لازم يكون مستخدم مسجل دخول
   wishlistController.addProductToWishlist
 );
 
@@ -20,6 +21,7 @@ router.post(
 router.delete(
   '/:productId',
   Auth.protect,
+   Auth.allowedTo("user"),
   wishlistController.removeProductFromWishlist
 );
 
@@ -31,7 +33,12 @@ router.delete(
 router.get(
   '/',
   Auth.protect,
+   Auth.allowedTo("user"),
   wishlistController.getLoggedUserWishlist
 );
+
+
+router.delete("/clear",   Auth.protect,  Auth.allowedTo("user"), wishlistController.clearWishlist);
+
 
 module.exports = router;

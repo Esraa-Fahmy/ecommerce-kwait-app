@@ -1,7 +1,8 @@
 const asyncHandler = require("express-async-handler");
 const ApiError = require("../utils/apiError");
 const OfferModel = require("../models/offer.model");
-
+  const { sendNotification } = require("../utils/sendNotifications");
+const User = require("../models/user.model");
 // ============================
 // ✅ Get All Offers
 // ============================
@@ -56,6 +57,17 @@ exports.getOffer = asyncHandler(async (req, res, next) => {
 // ============================
 exports.createOffer = asyncHandler(async (req, res) => {
   const offer = await OfferModel.create(req.body);
+
+const users = await User.find({});
+await Promise.all(users.map(user => 
+  sendNotification(
+    user._id,
+    "عرض جديد متاح!",
+    `تم إضافة عرض جديد على ${offer.targetType}، احصل عليه الآن!`,
+    "offer"
+  )
+));
+
   res.status(201).json({ data: offer });
 });
 

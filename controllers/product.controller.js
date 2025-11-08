@@ -5,6 +5,8 @@ const ProductModel = require("../models/product.model");
 const { v4: uuidv4 } = require('uuid');
 const sharp = require('sharp');
 const { uploadMixOfImages } = require('../middlewares/uploadImageMiddleWare');
+const User = require("../models/user.model");
+const cartModel = require("../models/cartModel");
 
 
 exports.uploadProductImages = uploadMixOfImages([
@@ -51,13 +53,14 @@ exports.resizeProductImages = asyncHandler(async (req, res, next) => {
 
 // ✅ Get All Products
 // ============================
-// ✅ Get All Products
+// ============================
+// ✅ Get All Products (Optimized)
+// ============================
 exports.getAllProducts = asyncHandler(async (req, res) => {
   const page = req.query.page * 1 || 1;
   const limit = req.query.limit * 1 || 10;
   const skip = (page - 1) * limit;
 
-  // 🔹 فلترة
   const filter = {};
   if (req.query.search) {
     filter.$or = [
@@ -70,17 +73,12 @@ exports.getAllProducts = asyncHandler(async (req, res) => {
   if (req.query.subCategory) filter.subCategory = req.query.subCategory;
   if (req.query.subSubCategory) filter.subSubCategory = req.query.subSubCategory;
 
-  // 🔹 ترتيب: default الأحدث أولاً
   let sortOption = { createdAt: -1 };
-  if (req.query.topSelling === "true") {
-    sortOption = { sold: -1 }; // الأعلى مبيعًا أولاً
-  }
+  if (req.query.topSelling === "true") sortOption = { sold: -1 };
 
-  // 🔹 إجمالي النتائج
   const totalProducts = await ProductModel.countDocuments(filter);
   const totalPages = Math.ceil(totalProducts / limit);
 
-  // 🔹 جلب المنتجات
   const products = await ProductModel.find(filter)
     .populate("category", "name")
     .populate("subCategory", "name")
@@ -89,23 +87,63 @@ exports.getAllProducts = asyncHandler(async (req, res) => {
     .limit(limit)
     .sort(sortOption);
 
+  // 🧠 هنا بنضيف حالة wishlist و cart لو المستخدم داخل
+  let finalProducts = [];
+
+  if (req.user) {
+    const user = await User.findById(req.user._id).select("wishlist");
+    const cart = await cartModel.findOne({ user: req.user._id });
+
+    finalProducts = products.map((p) => {
+      const product = p.toObject();
+
+      // Wishlist
+      product.isWishlist = user?.wishlist?.some(
+        (id) => id.toString() === p._id.toString()
+      );
+
+      // Cart
+      const cartItem = cart?.cartItems?.find(
+        (item) => item.product.toString() === p._id.toString()
+      );
+
+      product.isCart = !!cartItem;
+      product.cartQuantity = cartItem ? cartItem.quantity : 0;
+
+      return product;
+    });
+  } else {
+    finalProducts = products.map((p) => {
+      const product = p.toObject();
+      product.isWishlist = false;
+      product.isCart = false;
+      product.cartQuantity = 0;
+      return product;
+    });
+  }
+
   res.status(200).json({
-    results: products.length,
+    status: "success",
+    results: finalProducts.length,
     totalProducts,
     totalPages,
     currentPage: page,
     hasNextPage: page < totalPages,
     hasPrevPage: page > 1,
-    data: products,
+    data: finalProducts,
   });
 });
 
 
+
+
+
 // ============================
-// ✅ Get Single Product
+// ✅ Get Single Product 
 // ============================
 exports.getSingleProduct = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
+
   const product = await ProductModel.findById(id)
     .populate("category", "name")
     .populate("subCategory", "name")
@@ -115,8 +153,40 @@ exports.getSingleProduct = asyncHandler(async (req, res, next) => {
     return next(new ApiError(`No product found for this id ${id}`, 404));
   }
 
-  res.status(200).json({ data: product });
+  // تحويل المنتج لكائن عادي عشان نقدر نضيف عليه خصائص جديدة
+  let productData = product.toObject();
+
+  // 🧠 لو المستخدم داخل (auth)
+  if (req.user) {
+    const user = await User.findById(req.user._id).select("wishlist");
+    const cart = await cartModel.findOne({ user: req.user._id });
+
+    // ✅ check wishlist
+    productData.isWishlist = user?.wishlist?.some(
+      (pid) => pid.toString() === product._id.toString()
+    );
+
+    // ✅ check cart
+    const cartItem = cart?.cartItems?.find(
+      (item) => item.product.toString() === product._id.toString()
+    );
+
+    productData.isCart = !!cartItem;
+    productData.cartQuantity = cartItem ? cartItem.quantity : 0;
+  } else {
+    // لو المستخدم مش داخل
+    productData.isWishlist = false;
+    productData.isCart = false;
+    productData.cartQuantity = 0;
+  }
+
+  res.status(200).json({
+    status: "success",
+    data: productData,
+  });
 });
+
+
 
 // ============================
 // ✅ Create Product

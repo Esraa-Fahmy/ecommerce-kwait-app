@@ -112,3 +112,13 @@ exports.getLoggedUserWishlist = asyncHandler(async (req, res, next) => {
     data: validWishlist,
   });
 });
+
+// 🧹 حذف كل المنتجات من الـ Wishlist
+exports.clearWishlist = asyncHandler(async (req, res) => {
+  await Wishlist.deleteMany({ user: req.user._id });
+
+  res.status(200).json({
+    status: "success",
+    message: "All wishlist items have been removed successfully.",
+  });
+});

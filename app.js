@@ -1,14 +1,15 @@
 const path = require("path");
 const express = require("express");
 const dotenv = require("dotenv");
-const cors = require('cors');
+const cors = require("cors");
 const compression = require("compression");
-const http = require("http"); // ⬅️ استيراد http لإنشاء السيرفر
+const http = require("http"); // لإنشاء السيرفر
+const { Server } = require("socket.io");
+
 dotenv.config({ path: "config.env" });
 const dbConnection = require("./config/database");
-//const ApiError = require("./utils/apiError");
 const globalError = require("./middlewares/errmiddleware");
-
+const { initNotificationSystem } = require("./utils/sendNotifications");
 
 dbConnection();
 
@@ -16,16 +17,9 @@ const app = express();
 
 // Middleware
 app.use(compression());
-
 app.use(cors());
-
-
 app.use(express.json({ limit: "50mb" }));
 app.use(express.static(path.join(__dirname, "uploads")));
-
-
-
-
 
 // Mount Routes
 app.use("/api/v1/categories", require("./routes/category.route"));
@@ -41,26 +35,49 @@ app.use("/api/v1/cart", require("./routes/cart.route"));
 app.use("/api/v1/shipping", require("./routes/shippingRoute"));
 app.use("/api/v1/orders", require("./routes/orderRoute"));
 app.use("/api/v1/addresses", require("./routes/addressRoute"));
-
-
-
-
-
-
-
-
-
-
-
+app.use("/api/v1/notifications", require("./routes/notificationRoute"));
 
 // Global Error Handler
-/*app.all("*", (req, res, next) => {
-  next(new ApiError(`Can't find this route: ${req.originalUrl}`, 400));
-});*/
 app.use(globalError);
 
-
+// ⚙️ إنشاء السيرفر
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
+const server = http.createServer(app);
+
+// ============================
+// Socket.io setup
+// ============================
+const io = new Server(server, {
+  cors: {
+    origin: "*", // ممكن تحطي الدومين بتاعك
+  },
+});
+
+// Map للاحتفاظ بالمستخدمين المتصلين
+const connectedUsers = new Map();
+
+io.on("connection", (socket) => {
+  console.log("✅ مستخدم متصل:", socket.id);
+
+  // تسجيل المستخدم عند الـ login/connection
+  socket.on("register", (userId) => {
+    connectedUsers.set(userId, socket.id);
+    console.log(`📡 المستخدم ${userId} سجل في سوكيت`);
+  });
+
+  // عند فصل الاتصال
+  socket.on("disconnect", () => {
+    for (const [userId, id] of connectedUsers.entries()) {
+      if (id === socket.id) connectedUsers.delete(userId);
+    }
+    console.log("❌ مستخدم فصل الاتصال:", socket.id);
+  });
+});
+
+// تهيئة نظام الإشعارات
+initNotificationSystem(io, connectedUsers);
+
+// تشغيل السيرفر
+server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

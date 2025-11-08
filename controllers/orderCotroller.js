@@ -7,6 +7,8 @@ const Product = require("../models/product.model");
 const Address = require("../models/addressModel");
 const Shipping = require("../models/shippingModel");
 const User = require("../models/user.model");
+const { sendNotification } = require("../utils/sendNotifications");
+
 
 
 // 🧮 Helper: حساب الإجماليات + الخصومات + الكوبونات
@@ -140,7 +142,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
     coupon,
   });
 
-   await Order.populate("user", "firstName lastName email phone");
+   await order.populate("user", "firstName lastName email phone");
 
   // 🔄 تعديل الكميات في المنتجات
   for (const item of cart.cartItems) {
@@ -151,6 +153,13 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
 
   // 🧹 حذف الكارت بعد الإنشاء
   await Cart.findByIdAndDelete(cart._id);
+
+  await sendNotification(
+  req.user._id,
+  "تم إنشاء الطلب بنجاح",
+  `تم إنشاء طلبك رقم ${order._id} بنجاح، بإجمالي ${order.total} جنيه.`,
+  "order"
+);
 
   res.status(201).json({
     status: "success",
@@ -214,6 +223,12 @@ exports.updateOrderStatus = asyncHandler(async (req, res, next) => {
   order.status = status;
   await order.save();
 
+await sendNotification(
+  order.user._id,
+  "تم تحديث حالة الطلب",
+  `تم تغيير حالة طلبك رقم ${order._id} إلى "${order.status}".`,
+  "order"
+);
   res.status(200).json({ message: "Order status updated", data: order });
 });
 
@@ -233,6 +248,14 @@ exports.cancelOrder = asyncHandler(async (req, res, next) => {
 
   order.status = "cancelled_by_user";
   await order.save();
+
+
+  await sendNotification(
+  req.user._id,
+  "تم إلغاء الطلب",
+  `لقد تم إلغاء طلبك رقم ${order._id} بنجاح.`,
+  "order"
+);
 
   res.status(200).json({ message: "Order cancelled successfully", data: order });
 });

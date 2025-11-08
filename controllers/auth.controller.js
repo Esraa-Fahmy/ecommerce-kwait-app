@@ -6,6 +6,7 @@ const bcrypt = require("bcrypt");
 const crypto = require("crypto");
 const sendEmail = require("../utils/sendEmail");
 const createToken = require("../utils/createToken");
+const cartModel = require("../models/cartModel");
 
 // @desc    Signup
 // @route   POST /api/v1/auth/signup
@@ -35,8 +36,19 @@ exports.login = asyncHandler(async (req, res, next) => {
 
   user.password = undefined;
   const token = createToken(user._id);
-  res.status(200).json({ data: user, token });
+
+  // 🧠 نجلب الـ wishlist والـ cart
+  const wishlist = user.wishlist || [];
+  const cart = await cartModel.findOne({ user: user._id });
+
+  res.status(200).json({
+    data: user,
+    token,
+    wishlistCount: wishlist.length,
+    cartCount: cart ? cart.cartItems.length : 0,
+  });
 });
+
 
 // @desc   make sure the user is logged in
 exports.protect = asyncHandler(async (req, res, next) => {
