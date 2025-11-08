@@ -43,8 +43,9 @@ exports.resizeProductImages = asyncHandler(async (req, res, next) => {
   next();
 });
 
+
 // ============================
-// ✅ Get All Products (No lean)
+// ✅ Get All Products
 // ============================
 exports.getAllProducts = asyncHandler(async (req, res) => {
   const page = parseInt(req.query.page) || 1;
@@ -69,7 +70,7 @@ exports.getAllProducts = asyncHandler(async (req, res) => {
   const totalProducts = await ProductModel.countDocuments(filter);
   const totalPages = Math.ceil(totalProducts / limit);
 
-  const products = await ProductModel.find(filter)
+  let products = await ProductModel.find(filter)
     .populate("category", "name")
     .populate("subCategory", "name")
     .populate("subSubCategory", "name")
@@ -90,7 +91,7 @@ exports.getAllProducts = asyncHandler(async (req, res) => {
     });
 
     finalProducts = products.map(p => {
-      const product = p.toObject(); // 🟢 هنا حولنا الـ mongoose doc لكائن عادي
+      const product = p.toObject();
       product.isWishlist = wishlistIds.includes(p._id.toString());
       product.isCart = !!cartItemsMap[p._id.toString()];
       product.cartQuantity = cartItemsMap[p._id.toString()] || 0;
@@ -119,7 +120,7 @@ exports.getAllProducts = asyncHandler(async (req, res) => {
 });
 
 // ============================
-// ✅ Get Single Product (No lean)
+// ✅ Get Single Product
 // ============================
 exports.getSingleProduct = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
@@ -133,7 +134,7 @@ exports.getSingleProduct = asyncHandler(async (req, res, next) => {
     return next(new ApiError(`No product found for this id ${id}`, 404));
   }
 
-  const productData = product.toObject(); // 🟢 هنا كمان
+  const productData = product.toObject();
 
   if (req.user) {
     const user = await User.findById(req.user._id).select("wishlist");
