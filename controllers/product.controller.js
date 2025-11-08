@@ -44,11 +44,11 @@ exports.resizeProductImages = asyncHandler(async (req, res, next) => {
 });
 
 // ============================
-// ✅ Get All Products
+// ✅ Get All Products (No lean)
 // ============================
 exports.getAllProducts = asyncHandler(async (req, res) => {
-  const page = req.query.page * 1 || 1;
-  const limit = req.query.limit * 1 || 10;
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
   const skip = (page - 1) * limit;
 
   const filter = {};
@@ -79,25 +79,25 @@ exports.getAllProducts = asyncHandler(async (req, res) => {
 
   let finalProducts = [];
 
-if (req.user) {
-  const user = await User.findById(req.user._id).select("wishlist");
-  const wishlistIds = user.wishlist.map(id => id.toString());
-  const cart = await cartModel.findOne({ user: req.user._id });
+  if (req.user) {
+    const user = await User.findById(req.user._id).select("wishlist");
+    const wishlistIds = user.wishlist.map(id => id.toString());
 
-  finalProducts = products.map((p) => {
-    const product = p.toObject();
-    product.isWishlist = wishlistIds.includes(p._id.toString());
+    const cart = await cartModel.findOne({ user: req.user._id });
+    const cartItemsMap = {};
+    cart?.cartItems?.forEach(item => {
+      cartItemsMap[item.product.toString()] = item.quantity;
+    });
 
-    const cartItem = cart?.cartItems?.find(
-      (item) => item.product.toString() === p._id.toString()
-    );
-    product.isCart = !!cartItem;
-    product.cartQuantity = cartItem ? cartItem.quantity : 0;
-
-    return product;
-  });
-} else {
-    finalProducts = products.map((p) => {
+    finalProducts = products.map(p => {
+      const product = p.toObject(); // 🟢 هنا حولنا الـ mongoose doc لكائن عادي
+      product.isWishlist = wishlistIds.includes(p._id.toString());
+      product.isCart = !!cartItemsMap[p._id.toString()];
+      product.cartQuantity = cartItemsMap[p._id.toString()] || 0;
+      return product;
+    });
+  } else {
+    finalProducts = products.map(p => {
       const product = p.toObject();
       product.isWishlist = false;
       product.isCart = false;
@@ -119,7 +119,7 @@ if (req.user) {
 });
 
 // ============================
-// ✅ Get Single Product
+// ✅ Get Single Product (No lean)
 // ============================
 exports.getSingleProduct = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
@@ -133,28 +133,33 @@ exports.getSingleProduct = asyncHandler(async (req, res, next) => {
     return next(new ApiError(`No product found for this id ${id}`, 404));
   }
 
-  let productData = product.toObject();
+  const productData = product.toObject(); // 🟢 هنا كمان
 
-if (req.user) {
-  const user = await User.findById(req.user._id).select("wishlist");
-  const wishlistIds = user.wishlist.map(id => id.toString());
+  if (req.user) {
+    const user = await User.findById(req.user._id).select("wishlist");
+    const wishlistIds = user.wishlist.map(id => id.toString());
 
-  const cart = await cartModel.findOne({ user: req.user._id });
+    const cart = await cartModel.findOne({ user: req.user._id });
+    const cartItemsMap = {};
+    cart?.cartItems?.forEach(item => {
+      cartItemsMap[item.product.toString()] = item.quantity;
+    });
 
-  productData.isWishlist = wishlistIds.includes(product._id.toString());
-
-  const cartItem = cart?.cartItems?.find(
-    (item) => item.product.toString() === product._id.toString()
-  );
-  productData.isCart = !!cartItem;
-  productData.cartQuantity = cartItem ? cartItem.quantity : 0;
-}
+    productData.isWishlist = wishlistIds.includes(product._id.toString());
+    productData.isCart = !!cartItemsMap[product._id.toString()];
+    productData.cartQuantity = cartItemsMap[product._id.toString()] || 0;
+  } else {
+    productData.isWishlist = false;
+    productData.isCart = false;
+    productData.cartQuantity = 0;
+  }
 
   res.status(200).json({
     status: "success",
     data: productData,
   });
 });
+
 
 // ============================
 // ✅ Create, Update, Delete Product
