@@ -54,8 +54,6 @@ exports.resizeProductImages = asyncHandler(async (req, res, next) => {
 // ✅ Get All Products
 // ============================
 // ============================
-// ✅ Get All Products (Optimized)
-// ============================
 exports.getAllProducts = asyncHandler(async (req, res) => {
   const page = req.query.page * 1 || 1;
   const limit = req.query.limit * 1 || 10;
@@ -87,63 +85,49 @@ exports.getAllProducts = asyncHandler(async (req, res) => {
     .limit(limit)
     .sort(sortOption);
 
-  // 🧠 هنا بنضيف حالة wishlist و cart لو المستخدم داخل
-  let finalProducts = [];
+  let wishlistIds = [];
+  let wishlistCount = 0;
+  let cartMap = {};
+  let cartCount = 0;
 
   if (req.user) {
     const user = await User.findById(req.user._id).select("wishlist");
+    wishlistIds = user.wishlist.map(id => id.toString());
+    wishlistCount = user.wishlist.length;
+
     const cart = await cartModel.findOne({ user: req.user._id });
-
-    finalProducts = products.map((p) => {
-      const product = p.toObject();
-
-      // Wishlist
-      product.isWishlist = user?.wishlist?.some(
-        (id) => id.toString() === p._id.toString()
-      );
-
-      // Cart
-      const cartItem = cart?.cartItems?.find(
-        (item) => item.product.toString() === p._id.toString()
-      );
-
-      product.isCart = !!cartItem;
-      product.cartQuantity = cartItem ? cartItem.quantity : 0;
-
-      return product;
-    });
-  } else {
-    finalProducts = products.map((p) => {
-      const product = p.toObject();
-      product.isWishlist = false;
-      product.isCart = false;
-      product.cartQuantity = 0;
-      return product;
-    });
+    cartCount = cart?.cartItems?.length || 0;
+    if (cart) {
+      cart.cartItems.forEach(item => {
+        cartMap[item.product.toString()] = item.quantity;
+      });
+    }
   }
 
+  const formattedProducts = products.map(p => {
+    const product = p.toObject();
+    product.isWishlist = wishlistIds.includes(product._id.toString());
+    product.isCart = !!cartMap[product._id.toString()];
+    product.cartQuantity = cartMap[product._id.toString()] || 0;
+    product.wishlistCount = wishlistCount;
+    product.cartCount = cartCount;
+    return product;
+  });
+
   res.status(200).json({
-    status: "success",
-    results: finalProducts.length,
+    results: formattedProducts.length,
     totalProducts,
     totalPages,
     currentPage: page,
     hasNextPage: page < totalPages,
     hasPrevPage: page > 1,
-    data: finalProducts,
-  });
+    data: formattedProducts,
+  });
 });
 
 
-
-
-
-// ============================
-// ✅ Get Single Product 
-// ============================
 exports.getSingleProduct = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
-
   const product = await ProductModel.findById(id)
     .populate("category", "name")
     .populate("subCategory", "name")
@@ -153,40 +137,41 @@ exports.getSingleProduct = asyncHandler(async (req, res, next) => {
     return next(new ApiError(`No product found for this id ${id}`, 404));
   }
 
-  // تحويل المنتج لكائن عادي عشان نقدر نضيف عليه خصائص جديدة
   let productData = product.toObject();
 
-  // 🧠 لو المستخدم داخل (auth)
+  let wishlistIds = [];
+  let wishlistCount = 0;
+  let cartMap = {};
+  let cartCount = 0;
+
   if (req.user) {
     const user = await User.findById(req.user._id).select("wishlist");
+    wishlistIds = user.wishlist.map(id => id.toString());
+    wishlistCount = user.wishlist.length;
+
     const cart = await cartModel.findOne({ user: req.user._id });
+    cartCount = cart?.cartItems?.length || 0;
+    if (cart) {
+      cart.cartItems.forEach(item => {
+        cartMap[item.product.toString()] = item.quantity;
+      });
+    }
 
-    // ✅ check wishlist
-    productData.isWishlist = user?.wishlist?.some(
-      (pid) => pid.toString() === product._id.toString()
-    );
-
-    // ✅ check cart
-    const cartItem = cart?.cartItems?.find(
-      (item) => item.product.toString() === product._id.toString()
-    );
-
-    productData.isCart = !!cartItem;
-    productData.cartQuantity = cartItem ? cartItem.quantity : 0;
+    productData.isWishlist = wishlistIds.includes(product._id.toString());
+    productData.isCart = !!cartMap[product._id.toString()];
+    productData.cartQuantity = cartMap[product._id.toString()] || 0;
+    productData.wishlistCount = wishlistCount;
+    productData.cartCount = cartCount;
   } else {
-    // لو المستخدم مش داخل
     productData.isWishlist = false;
     productData.isCart = false;
     productData.cartQuantity = 0;
+    productData.wishlistCount = 0;
+    productData.cartCount = 0;
   }
 
-  res.status(200).json({
-    status: "success",
-    data: productData,
-  });
+  res.status(200).json({ data: productData });
 });
-
-
 
 // ============================
 // ✅ Create Product
