@@ -51,9 +51,6 @@ exports.resizeProductImages = asyncHandler(async (req, res, next) => {
 
 
 
-// ✅ Get All Products
-// ============================
-// ============================
 exports.getAllProducts = asyncHandler(async (req, res) => {
   const page = req.query.page * 1 || 1;
   const limit = req.query.limit * 1 || 10;
@@ -93,22 +90,25 @@ exports.getAllProducts = asyncHandler(async (req, res) => {
   if (req.user) {
     const user = await User.findById(req.user._id).select("wishlist");
     wishlistIds = user.wishlist.map(id => id.toString());
-    wishlistCount = user.wishlist.length;
+    wishlistCount = wishlistIds.length;
 
     const cart = await cartModel.findOne({ user: req.user._id });
-    cartCount = cart?.cartItems?.length || 0;
     if (cart) {
       cart.cartItems.forEach(item => {
-        cartMap[item.product.toString()] = item.quantity;
+        const prodId = item.product._id ? item.product._id.toString() : item.product.toString();
+        if (!cartMap[prodId]) cartMap[prodId] = 0;
+        cartMap[prodId] += item.quantity;
       });
+      cartCount = cart.cartItems.length; // عدد العناصر
     }
   }
 
   const formattedProducts = products.map(p => {
     const product = p.toObject();
-    product.isWishlist = wishlistIds.includes(product._id.toString());
-    product.isCart = !!cartMap[product._id.toString()];
-    product.cartQuantity = cartMap[product._id.toString()] || 0;
+    const prodId = product._id.toString();
+    product.isWishlist = wishlistIds.includes(prodId);
+    product.isCart = !!cartMap[prodId];
+    product.cartQuantity = cartMap[prodId] || 0;
     product.wishlistCount = wishlistCount;
     product.cartCount = cartCount;
     return product;
@@ -122,10 +122,13 @@ exports.getAllProducts = asyncHandler(async (req, res) => {
     hasNextPage: page < totalPages,
     hasPrevPage: page > 1,
     data: formattedProducts,
-  });
+  });
 });
 
 
+
+// ============================
+// ✅ Get Single Product 
 exports.getSingleProduct = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
   const product = await ProductModel.findById(id)
@@ -147,19 +150,22 @@ exports.getSingleProduct = asyncHandler(async (req, res, next) => {
   if (req.user) {
     const user = await User.findById(req.user._id).select("wishlist");
     wishlistIds = user.wishlist.map(id => id.toString());
-    wishlistCount = user.wishlist.length;
+    wishlistCount = wishlistIds.length;
 
     const cart = await cartModel.findOne({ user: req.user._id });
-    cartCount = cart?.cartItems?.length || 0;
     if (cart) {
       cart.cartItems.forEach(item => {
-        cartMap[item.product.toString()] = item.quantity;
+        const prodId = item.product._id ? item.product._id.toString() : item.product.toString();
+        if (!cartMap[prodId]) cartMap[prodId] = 0;
+        cartMap[prodId] += item.quantity;
       });
+      cartCount = cart.cartItems.length;
     }
 
-    productData.isWishlist = wishlistIds.includes(product._id.toString());
-    productData.isCart = !!cartMap[product._id.toString()];
-    productData.cartQuantity = cartMap[product._id.toString()] || 0;
+    const prodId = product._id.toString();
+    productData.isWishlist = wishlistIds.includes(prodId);
+    productData.isCart = !!cartMap[prodId];
+    productData.cartQuantity = cartMap[prodId] || 0;
     productData.wishlistCount = wishlistCount;
     productData.cartCount = cartCount;
   } else {
@@ -170,8 +176,10 @@ exports.getSingleProduct = asyncHandler(async (req, res, next) => {
     productData.cartCount = 0;
   }
 
-  res.status(200).json({ data: productData });
+  res.status(200).json({ data: productData });
 });
+
+
 
 // ============================
 // ✅ Create Product
