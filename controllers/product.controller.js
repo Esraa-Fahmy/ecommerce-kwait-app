@@ -79,27 +79,24 @@ exports.getAllProducts = asyncHandler(async (req, res) => {
 
   let finalProducts = [];
 
-  if (req.user) {
-    const user = await User.findById(req.user._id)
-      .select("wishlist")
-      .populate("wishlist", "_id");
+if (req.user) {
+  const user = await User.findById(req.user._id).select("wishlist");
+  const wishlistIds = user.wishlist.map(id => id.toString());
+  const cart = await cartModel.findOne({ user: req.user._id });
 
-    const wishlistIds = user?.wishlist?.map(p => p._id.toString()) || [];
-    const cart = await cartModel.findOne({ user: req.user._id });
+  finalProducts = products.map((p) => {
+    const product = p.toObject();
+    product.isWishlist = wishlistIds.includes(p._id.toString());
 
-    finalProducts = products.map((p) => {
-      const product = p.toObject();
-      product.isWishlist = wishlistIds.includes(p._id.toString());
+    const cartItem = cart?.cartItems?.find(
+      (item) => item.product.toString() === p._id.toString()
+    );
+    product.isCart = !!cartItem;
+    product.cartQuantity = cartItem ? cartItem.quantity : 0;
 
-      const cartItem = cart?.cartItems?.find(
-        (item) => item.product.toString() === p._id.toString()
-      );
-      product.isCart = !!cartItem;
-      product.cartQuantity = cartItem ? cartItem.quantity : 0;
-
-      return product;
-    });
-  } else {
+    return product;
+  });
+} else {
     finalProducts = products.map((p) => {
       const product = p.toObject();
       product.isWishlist = false;
@@ -138,25 +135,20 @@ exports.getSingleProduct = asyncHandler(async (req, res, next) => {
 
   let productData = product.toObject();
 
-  if (req.user) {
-    const user = await User.findById(req.user._id)
-      .select("wishlist")
-      .populate("wishlist", "_id");
-    const wishlistIds = user?.wishlist?.map(p => p._id.toString()) || [];
-    const cart = await cartModel.findOne({ user: req.user._id });
+if (req.user) {
+  const user = await User.findById(req.user._id).select("wishlist");
+  const wishlistIds = user.wishlist.map(id => id.toString());
 
-    productData.isWishlist = wishlistIds.includes(product._id.toString());
+  const cart = await cartModel.findOne({ user: req.user._id });
 
-    const cartItem = cart?.cartItems?.find(
-      (item) => item.product.toString() === product._id.toString()
-    );
-    productData.isCart = !!cartItem;
-    productData.cartQuantity = cartItem ? cartItem.quantity : 0;
-  } else {
-    productData.isWishlist = false;
-    productData.isCart = false;
-    productData.cartQuantity = 0;
-  }
+  productData.isWishlist = wishlistIds.includes(product._id.toString());
+
+  const cartItem = cart?.cartItems?.find(
+    (item) => item.product.toString() === product._id.toString()
+  );
+  productData.isCart = !!cartItem;
+  productData.cartQuantity = cartItem ? cartItem.quantity : 0;
+}
 
   res.status(200).json({
     status: "success",
