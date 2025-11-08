@@ -90,7 +90,29 @@ exports.getAllProducts = asyncHandler(async (req, res) => {
   // 🧠 هنا بنضيف حالة wishlist و cart لو المستخدم داخل
   let finalProducts = [];
 
-ئئ else {
+  if (req.user) {
+    const user = await User.findById(req.user._id).select("wishlist");
+    const cart = await cartModel.findOne({ user: req.user._id });
+
+    finalProducts = products.map((p) => {
+      const product = p.toObject();
+
+      // Wishlist
+      product.isWishlist = user?.wishlist?.some(
+        (id) => id.toString() === p._id.toString()
+      );
+
+      // Cart
+      const cartItem = cart?.cartItems?.find(
+        (item) => item.product.toString() === p._id.toString()
+      );
+
+      product.isCart = !!cartItem;
+      product.cartQuantity = cartItem ? cartItem.quantity : 0;
+
+      return product;
+    });
+  } else {
     finalProducts = products.map((p) => {
       const product = p.toObject();
       product.isWishlist = false;
