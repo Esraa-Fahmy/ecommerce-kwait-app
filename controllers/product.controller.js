@@ -46,7 +46,6 @@ exports.resizeProductImages = asyncHandler(async (req, res, next) => {
 
 // ============================
 // ✅ Get All Products
-// ============================
 exports.getAllProducts = asyncHandler(async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
@@ -82,19 +81,26 @@ exports.getAllProducts = asyncHandler(async (req, res) => {
 
   if (req.user) {
     const user = await User.findById(req.user._id).select("wishlist");
-    const wishlistIds = user.wishlist.map(id => id.toString());
+    const wishlistIds = user.wishlist.map(item => item._id ? item._id.toString() : item.toString());
 
-    const cart = await cartModel.findOne({ user: req.user._id });
-    const cartItemsMap = {};
-    cart?.cartItems?.forEach(item => {
-      cartItemsMap[item.product.toString()] = item.quantity;
-    });
+    const cart = await cartModel.findOne({ user: req.user._id }).populate("cartItems.product");
 
     finalProducts = products.map(p => {
       const product = p.toObject();
+
+      // wishlist
       product.isWishlist = wishlistIds.includes(p._id.toString());
-      product.isCart = !!cartItemsMap[p._id.toString()];
-      product.cartQuantity = cartItemsMap[p._id.toString()] || 0;
+
+      // cart
+      const cartItem = cart?.cartItems?.find(item => {
+        if (!item.product) return false;
+        const prodId = item.product._id ? item.product._id.toString() : item.product.toString();
+        return prodId === p._id.toString();
+      });
+
+      product.isCart = !!cartItem;
+      product.cartQuantity = cartItem ? cartItem.quantity : 0;
+
       return product;
     });
   } else {
@@ -121,7 +127,6 @@ exports.getAllProducts = asyncHandler(async (req, res) => {
 
 // ============================
 // ✅ Get Single Product
-// ============================
 exports.getSingleProduct = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
 
@@ -138,17 +143,22 @@ exports.getSingleProduct = asyncHandler(async (req, res, next) => {
 
   if (req.user) {
     const user = await User.findById(req.user._id).select("wishlist");
-    const wishlistIds = user.wishlist.map(id => id.toString());
+    const wishlistIds = user.wishlist.map(item => item._id ? item._id.toString() : item.toString());
 
-    const cart = await cartModel.findOne({ user: req.user._id });
-    const cartItemsMap = {};
-    cart?.cartItems?.forEach(item => {
-      cartItemsMap[item.product.toString()] = item.quantity;
+    const cart = await cartModel.findOne({ user: req.user._id }).populate("cartItems.product");
+
+    // wishlist
+    productData.isWishlist = wishlistIds.includes(product._id.toString());
+
+    // cart
+    const cartItem = cart?.cartItems?.find(item => {
+      if (!item.product) return false;
+      const prodId = item.product._id ? item.product._id.toString() : item.product.toString();
+      return prodId === product._id.toString();
     });
 
-    productData.isWishlist = wishlistIds.includes(product._id.toString());
-    productData.isCart = !!cartItemsMap[product._id.toString()];
-    productData.cartQuantity = cartItemsMap[product._id.toString()] || 0;
+    productData.isCart = !!cartItem;
+    productData.cartQuantity = cartItem ? cartItem.quantity : 0;
   } else {
     productData.isWishlist = false;
     productData.isCart = false;
