@@ -32,17 +32,15 @@ exports.addProductToWishlist = asyncHandler(async (req, res, next) => {
   }
 
   // ✅ إضافة القصة إذا كانت موجودة
-  const updatedUser = await User.findByIdAndUpdate(
-    req.user._id,
-    { $addToSet: { wishlist: productId } },
-    { new: true }
-  );
+// بعد $addToSet أو $pull
+const updatedUser = await User.findByIdAndUpdate(req.user._id, { $addToSet: { wishlist: productId } }, { new: true }).select("wishlist");
+res.status(200).json({
+  status: "success",
+  message: "Product added successfully to your wishlist.",
+  wishlistCount: updatedUser.wishlist.length,
+  data: updatedUser.wishlist,
+});
 
-  res.status(200).json({
-    status: "success",
-    message: "Product added successfully to your wishlist.",
-    data: updatedUser.wishlist,
-  });
 });
 
 
@@ -75,17 +73,15 @@ exports.removeProductFromWishlist = asyncHandler(async (req, res, next) => {
   }
 
   // ✅ إزالة القصة إذا كانت موجودة
-  const updatedUser = await User.findByIdAndUpdate(
-    req.user._id,
-    { $pull: { wishlist: productId } },
-    { new: true }
-  );
+// بعد $addToSet أو $pull
+const updatedUser = await User.findByIdAndUpdate(req.user._id, { $addToSet: { wishlist: productId } }, { new: true }).select("wishlist");
+res.status(200).json({
+  status: "success",
+  message: "Product removed successfully from your wishlist.",
+  wishlistCount: updatedUser.wishlist.length,
+  data: updatedUser.wishlist,
+});
 
-  res.status(200).json({
-    status: "success",
-    message: "product removed successfully from your wishlist.",
-    data: updatedUser.wishlist,
-  });
 });
 
 
