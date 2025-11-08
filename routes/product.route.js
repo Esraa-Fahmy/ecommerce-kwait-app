@@ -24,7 +24,8 @@ const router = express.Router();
 // ✅ Get All Products / Create Product
 router
   .route('/')
-  .get(getAllProducts)
+  .get(    Auth.protect,
+getAllProducts)
   .post(
     Auth.protect,
     Auth.allowedTo('admin'),
@@ -37,7 +38,8 @@ router
 // ✅ Get Single / Update / Delete Product
 router
   .route('/:id')
-  .get(getProductValidator, getSingleProduct)
+  .get(    Auth.protect,
+getProductValidator, getSingleProduct)
   .put(
     Auth.protect,
     Auth.allowedTo('admin'),
