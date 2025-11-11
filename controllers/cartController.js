@@ -18,9 +18,12 @@ const removeOutOfStockItems = async (cart) => {
   await cart.save();
 };
 
-// 🏷 تطبيق الأوفرز على عنصر (function داخلية)
+
+
+// 👈 دالة لتطبيق الأوفرز وحساب السعر النهائي حسب الكمية
 const applyOffersOnItem = async (item) => {
   const product = await Product.findById(item.product)
+    .select("title description imageCover colors sizes Material price isWishlist category subCategory subSubCategory")
     .populate("category subCategory subSubCategory");
 
   if (!product) return item;
@@ -38,7 +41,6 @@ const applyOffersOnItem = async (item) => {
     ],
   }).sort({ priority: -1 });
 
-  // price baseline
   let finalPrice = Number(product.price) || 0;
 
   if (offers.length > 0) {
@@ -53,7 +55,6 @@ const applyOffersOnItem = async (item) => {
       typeof offer.getQuantity === "number" &&
       item.quantity >= offer.buyQuantity
     ) {
-      // compute average price per item after free items calculation
       const freeItems = Math.floor(item.quantity / (offer.buyQuantity + offer.getQuantity)) * offer.getQuantity;
       const paidItems = item.quantity - freeItems;
       finalPrice = paidItems > 0 ? (paidItems * product.price) / item.quantity : 0;
@@ -62,43 +63,42 @@ const applyOffersOnItem = async (item) => {
 
   if (isNaN(finalPrice) || finalPrice < 0) finalPrice = 0;
 
-  // set both price (original per-item) and priceAfterOffer
   item.price = Number(product.price);
   item.priceAfterOffer = Number(finalPrice);
 
-  // attach a snapshot of selected attributes & product meta (so cart keeps needed info)
+  // snapshot product info
   item.title = product.title;
+  item.description = product.description;
   item.imageCover = product.imageCover;
-  item.Material = product.Material;
+  item.Material = item.Material || product.Material;
   item.colors = product.colors;
   item.sizes = product.sizes;
+  item.isWishlist = product.isWishlist || false;
 
   return item;
 };
 
-// ⚙️ إعادة حساب الإجمالي بعد العروض
+// 👈 دالة لحساب الإجمالي بعد التحديثات
 const recalcCartTotals = async (cart) => {
-  let totalPrice = 0;
-  let totalAfter = 0;
+  let totalCartPrice = 0;
+  let totalPriceAfterDiscount = 0;
 
-  // update each item prices according to offers
   for (let i = 0; i < cart.cartItems.length; i++) {
     const item = cart.cartItems[i];
     const updatedItem = await applyOffersOnItem(item);
-    const priceUsed = Number(updatedItem.priceAfterOffer ?? updatedItem.price ?? 0);
-    const qty = Number(updatedItem.quantity ?? 0);
-    const itemTotal = priceUsed * qty;
+    const priceUsed = updatedItem.priceAfterOffer || updatedItem.price || 0;
+    const qty = updatedItem.quantity || 0;
 
-    if (!isNaN(itemTotal)) {
-      totalPrice += (Number(updatedItem.price ?? 0) * qty); // sum original prices (optional)
-      totalAfter += itemTotal;
-    }
+    totalCartPrice += updatedItem.price * qty;
+    totalPriceAfterDiscount += priceUsed * qty;
   }
 
-  cart.totalCartPrice = Number(totalAfter) || 0; // final amount shown in cart
-  cart.totalPriceAfterDiscount = Number(totalAfter) || 0;
+  cart.totalCartPrice = totalCartPrice;
+  cart.totalPriceAfterDiscount = totalPriceAfterDiscount;
   await cart.save();
 };
+
+
 
 // 🟢 إضافة منتج للكارت
 exports.addToCart = asyncHandler(async (req, res, next) => {
@@ -176,73 +176,67 @@ exports.addToCart = asyncHandler(async (req, res, next) => {
   await recalcCartTotals(cart);
 
   // إعادة الجلب مع populate + description
-  const updatedCart = await Cart.findById(cart._id).populate({
-    path: "cartItems.product",
-    select: "title price imageCover colors sizes Material quantity category subCategory subSubCategory description"
-  });
+// بعد حساب الأسعار وتحديث الكارت
+const updatedCart = await Cart.findById(cart._id).populate({
+  path: "cartItems.product",
+  select: "title price description imageCover colors sizes Material isWishlist quantity category subCategory subSubCategory",
+});
 
-  // map لإضافة itemId و isWishlist
-  updatedCart.cartItems = updatedCart.cartItems.map(item => {
-    const product = item.product ? item.product.toObject() : {};
-    const isWishlist = req.user.wishlist ? req.user.wishlist.includes(item.product._id) : false;
-    return {
-      ...item.toObject(),
-      itemId: item._id,
-      product: {
-        ...product,
-        isWishlist
-      }
-    };
-  });
+cart.cartItems = cart.cartItems.map(item => ({
+  ...item.toObject(),
+  itemId: item._id, // 👈 نرجع الـ id بوضوح
+  title: item.product?.title || item.title,
+  imageCover: item.product?.imageCover || item.imageCover,
+  description: item.product?.description || "",
+  Material: item.Material,
+  size: item.size,
+  color: item.color,
+  price: item.price,
+  priceAfterOffer: item.priceAfterOffer,
+  isWishlist: item.product?.isWishlist || false,
+}));
 
-  res.status(200).json({
-    status: "success",
-    message: "Product added to cart successfully",
-    data: updatedCart,
-  });
+res.status(200).json({
+  status: "success",
+  message: "Product added to cart successfully",
+  data: updatedCart,
+});
+
 });
 
 
 // 🟡 جلب كارت المستخدم
 exports.getLoggedUserCart = asyncHandler(async (req, res, next) => {
-  if (!req.user) return next(new ApiError("User not logged in", 401));
-
   let cart = await Cart.findOne({ user: req.user._id }).populate({
     path: "cartItems.product",
-    select: "title price imageCover colors sizes Material quantity category subCategory subSubCategory description"
+    select: "title price description imageCover colors sizes Material isWishlist quantity category subCategory subSubCategory",
   });
 
   if (!cart) return res.status(200).json({ status: "success", results: 0, data: null });
 
-  // إزالة العناصر منتهية المخزون
+  // إزالة المنتجات اللي خلصت وتحديث الأسعار بعد العروض
   await removeOutOfStockItems(cart);
-  // إعادة حساب الأسعار بعد الأوفرز
   await recalcCartTotals(cart);
 
-  // إعادة جلب الكارت بعد التحديث
+  // تحديث الكارت بعد الحفظ لتشمل التفاصيل المطلوبة لكل عنصر
   cart = await Cart.findById(cart._id).populate({
     path: "cartItems.product",
-    select: "title price imageCover colors sizes Material quantity category subCategory subSubCategory description"
+    select: "title price description imageCover colors sizes Material isWishlist quantity category subCategory subSubCategory",
   });
 
-  // map لإضافة itemId و isWishlist
-  cart.cartItems = cart.cartItems.map(item => {
-    const product = item.product ? item.product.toObject() : {};
-
-    // isWishlist للمستخدم
-    const isWishlist = req.user.wishlist
-      ? req.user.wishlist.includes(item.product._id)
-      : false;
-
-    return {
-      ...item.toObject(),
-      itemId: item._id,
-      product: {
-        ...product,
-        isWishlist
-      }
-    };
-  });
+  cart.cartItems = cart.cartItems.map(item => ({
+    ...item.toObject(),
+    itemId: item._id,
+    title: item.product?.title || item.title,
+    imageCover: item.product?.imageCover || item.imageCover,
+    description: item.product?.description || "",
+    Material: item.Material,
+    size: item.size,
+    color: item.color,
+    price: item.price,
+    priceAfterOffer: item.priceAfterOffer,
+    isWishlist: item.product?.isWishlist || false,
+  }));
 
   res.status(200).json({
     status: "success",
@@ -250,6 +244,7 @@ exports.getLoggedUserCart = asyncHandler(async (req, res, next) => {
     data: cart,
   });
 });
+
 
 
 exports.updateCartItem = asyncHandler(async (req, res, next) => {
@@ -269,34 +264,39 @@ exports.updateCartItem = asyncHandler(async (req, res, next) => {
   const product = await Product.findById(item.product);
   if (!product) return next(new ApiError("Product not found", 404));
 
+  // ✅ تحقق من المخزون
   if (quantity && quantity > product.quantity) {
     return next(new ApiError(`Only ${product.quantity} items available in stock`, 400));
   }
 
+  // ✅ تحديث الخصائص
   if (quantity) item.quantity = quantity;
   if (color) item.color = color;
   if (size) item.size = size;
   if (material) item.Material = material;
 
+  // ⚙️ إعادة حساب الأسعار بعد أي تغيير و تطبيق العروض
   await recalcCartTotals(cart);
 
+  // تحديث كل منتجات الكارت لتشمل التفاصيل المطلوبة
   const updatedCart = await Cart.findById(cart._id).populate({
     path: "cartItems.product",
-    select: "title price imageCover colors sizes Material quantity category subCategory subSubCategory description"
+    select: "title price description imageCover colors sizes Material isWishlist",
   });
 
-  updatedCart.cartItems = updatedCart.cartItems.map(item => {
-    const product = item.product ? item.product.toObject() : {};
-    const isWishlist = req.user.wishlist ? req.user.wishlist.includes(item.product._id) : false;
-    return {
-      ...item.toObject(),
-      itemId: item._id,
-      product: {
-        ...product,
-        isWishlist
-      }
-    };
-  });
+  updatedCart.cartItems = updatedCart.cartItems.map(item => ({
+    ...item.toObject(),
+    itemId: item._id,
+    title: item.product?.title || item.title,
+    imageCover: item.product?.imageCover || item.imageCover,
+    description: item.product?.description || "",
+    Material: item.Material,
+    size: item.size,
+    color: item.color,
+    price: item.price,
+    priceAfterOffer: item.priceAfterOffer,
+    isWishlist: item.product?.isWishlist || false,
+  }));
 
   res.status(200).json({
     status: "success",
@@ -304,6 +304,7 @@ exports.updateCartItem = asyncHandler(async (req, res, next) => {
     data: updatedCart,
   });
 });
+
 
 
 // 🔴 حذف منتج من الكارت
