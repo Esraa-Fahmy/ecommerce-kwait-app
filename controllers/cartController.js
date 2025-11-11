@@ -18,12 +18,9 @@ const removeOutOfStockItems = async (cart) => {
   await cart.save();
 };
 
-
-
-// 👈 دالة لتطبيق الأوفرز وحساب السعر النهائي حسب الكمية
+// 🏷 تطبيق الأوفرز على عنصر
 const applyOffersOnItem = async (item) => {
   const product = await Product.findById(item.product)
-    .select("title description imageCover colors sizes Material price isWishlist category subCategory subSubCategory")
     .populate("category subCategory subSubCategory");
 
   if (!product) return item;
@@ -65,40 +62,43 @@ const applyOffersOnItem = async (item) => {
 
   item.price = Number(product.price);
   item.priceAfterOffer = Number(finalPrice);
-
-  // snapshot product info
   item.title = product.title;
-  item.description = product.description;
   item.imageCover = product.imageCover;
-  item.Material = item.Material || product.Material;
+  item.Material = product.Material;
   item.colors = product.colors;
   item.sizes = product.sizes;
-  item.isWishlist = product.isWishlist || false;
+
+  // ✅ السعر الكلي حسب الكمية لكل عنصر
+  item.priceTotal = Number(item.priceAfterOffer * item.quantity);
+
+  // attach product snapshot
+  item.product = product;
 
   return item;
 };
 
-// 👈 دالة لحساب الإجمالي بعد التحديثات
+// ⚙️ إعادة حساب الإجمالي بعد العروض
 const recalcCartTotals = async (cart) => {
-  let totalCartPrice = 0;
-  let totalPriceAfterDiscount = 0;
+  let totalPrice = 0;
+  let totalAfter = 0;
 
   for (let i = 0; i < cart.cartItems.length; i++) {
     const item = cart.cartItems[i];
     const updatedItem = await applyOffersOnItem(item);
-    const priceUsed = updatedItem.priceAfterOffer || updatedItem.price || 0;
-    const qty = updatedItem.quantity || 0;
+    const priceUsed = Number(updatedItem.priceAfterOffer ?? updatedItem.price ?? 0);
+    const qty = Number(updatedItem.quantity ?? 0);
+    const itemTotal = priceUsed * qty;
 
-    totalCartPrice += updatedItem.price * qty;
-    totalPriceAfterDiscount += priceUsed * qty;
+    if (!isNaN(itemTotal)) {
+      totalPrice += Number(updatedItem.price ?? 0) * qty;
+      totalAfter += itemTotal;
+    }
   }
 
-  cart.totalCartPrice = totalCartPrice;
-  cart.totalPriceAfterDiscount = totalPriceAfterDiscount;
+  cart.totalCartPrice = Number(totalAfter) || 0;
+  cart.totalPriceAfterDiscount = Number(totalAfter) || 0;
   await cart.save();
 };
-
-
 
 // 🟢 إضافة منتج للكارت
 exports.addToCart = asyncHandler(async (req, res, next) => {
@@ -111,39 +111,41 @@ exports.addToCart = asyncHandler(async (req, res, next) => {
   const product = await Product.findById(productId);
   if (!product) return next(new ApiError("Product not found", 404));
 
-  // التحقق من الخيارات والمخزون (كما في الكود السابق)
-  if (Array.isArray(product.colors) && product.colors.length > 0 && !color) {
+  if (Array.isArray(product.colors) && product.colors.length > 0 && !color)
     return next(new ApiError("You must select a color for this product", 400));
-  }
-  if (Array.isArray(product.sizes) && product.sizes.length > 0 && !size) {
+  if (Array.isArray(product.sizes) && product.sizes.length > 0 && !size)
     return next(new ApiError("You must select a size for this product", 400));
-  }
-  if (product.Material && Array.isArray(product.Material) && product.Material.length > 0 && !material) {
+  if (product.Material && Array.isArray(product.Material) && product.Material.length > 0 && !material)
     return next(new ApiError("You must select a material for this product", 400));
-  }
-  if (product.quantity <= 0) return next(new ApiError("This product is out of stock", 400));
-  if (quantity > product.quantity) return next(new ApiError(`Only ${product.quantity} items available in stock`, 400));
+
+  if (product.quantity <= 0)
+    return next(new ApiError("This product is out of stock", 400));
+  if (quantity > product.quantity)
+    return next(new ApiError(`Only ${product.quantity} items available in stock`, 400));
 
   let cart = await Cart.findOne({ user: req.user._id }).populate("cartItems.product");
 
   if (!cart) {
     cart = await Cart.create({
       user: req.user._id,
-      cartItems: [{
-        product: productId,
-        title: product.title,
-        imageCover: product.imageCover,
-        Material: material,
-        size,
-        color,
-        quantity,
-        price: product.price,
-        priceAfterOffer: product.price,
-      }]
+      cartItems: [
+        {
+          product: productId,
+          title: product.title,
+          imageCover: product.imageCover,
+          Material: material,
+          size,
+          color,
+          quantity,
+          price: product.price,
+          priceAfterOffer: product.price,
+          priceTotal: product.price * quantity, // 👈 السعر الكلي حسب الكمية
+        },
+      ],
     });
   } else {
-    const itemIndex = cart.cartItems.findIndex(item => {
-      const sameProduct = item.product._id.toString() === productId;
+    const itemIndex = cart.cartItems.findIndex((item) => {
+      const sameProduct = item.product._id ? item.product._id.toString() === productId : item.product.toString() === productId;
       const sameColor = (item.color || "") === (color || "");
       const sameSize = (item.size || "") === (size || "");
       const sameMaterial = (item.Material || "") === (material || "");
@@ -152,11 +154,11 @@ exports.addToCart = asyncHandler(async (req, res, next) => {
 
     if (itemIndex > -1) {
       const existing = cart.cartItems[itemIndex];
-      const newTotalQty = Number(existing.quantity || 0) + Number(quantity);
-      if (newTotalQty > product.quantity) {
+      const newTotalQty = Number(existing.quantity || 0) + Number(quantity || 0);
+      if (newTotalQty > product.quantity)
         return next(new ApiError(`Only ${product.quantity} items available in stock`, 400));
-      }
       existing.quantity = newTotalQty;
+      existing.priceTotal = Number(existing.priceAfterOffer * existing.quantity); // 👈 تحديث السعر الكلي
     } else {
       cart.cartItems.push({
         product: productId,
@@ -168,6 +170,7 @@ exports.addToCart = asyncHandler(async (req, res, next) => {
         quantity,
         price: product.price,
         priceAfterOffer: product.price,
+        priceTotal: product.price * quantity, // 👈 السعر الكلي حسب الكمية
       });
     }
   }
@@ -175,66 +178,48 @@ exports.addToCart = asyncHandler(async (req, res, next) => {
   await removeOutOfStockItems(cart);
   await recalcCartTotals(cart);
 
-  // إعادة الجلب مع populate + description
-// بعد حساب الأسعار وتحديث الكارت
-const updatedCart = await Cart.findById(cart._id).populate({
-  path: "cartItems.product",
-  select: "title price description imageCover colors sizes Material isWishlist quantity category subCategory subSubCategory",
+  const updatedCart = await Cart.findById(cart._id).populate({
+    path: "cartItems.product",
+    select: "title description price imageCover colors sizes Material isWishlist",
+  });
+
+  updatedCart.cartItems = updatedCart.cartItems.map(item => ({
+    ...item.toObject(),
+    itemId: item._id,
+    priceTotal: Number((item.priceAfterOffer || item.price) * (item.quantity || 1)),
+    description: item.product?.description || "",
+    isWishlist: item.product?.isWishlist || false,
+  }));
+
+  res.status(200).json({
+    status: "success",
+    message: "Product added to cart successfully",
+    data: updatedCart,
+  });
 });
-
-cart.cartItems = cart.cartItems.map(item => ({
-  ...item.toObject(),
-  itemId: item._id, // 👈 نرجع الـ id بوضوح
-  title: item.product?.title || item.title,
-  imageCover: item.product?.imageCover || item.imageCover,
-  description: item.product?.description || "",
-  Material: item.Material,
-  size: item.size,
-  color: item.color,
-  price: item.price,
-  priceAfterOffer: item.priceAfterOffer,
-  isWishlist: item.product?.isWishlist || false,
-}));
-
-res.status(200).json({
-  status: "success",
-  message: "Product added to cart successfully",
-  data: updatedCart,
-});
-
-});
-
 
 // 🟡 جلب كارت المستخدم
 exports.getLoggedUserCart = asyncHandler(async (req, res, next) => {
   let cart = await Cart.findOne({ user: req.user._id }).populate({
     path: "cartItems.product",
-    select: "title price description imageCover colors sizes Material isWishlist quantity category subCategory subSubCategory",
+    select: "title description price imageCover colors sizes Material isWishlist",
   });
 
   if (!cart) return res.status(200).json({ status: "success", results: 0, data: null });
 
-  // إزالة المنتجات اللي خلصت وتحديث الأسعار بعد العروض
   await removeOutOfStockItems(cart);
   await recalcCartTotals(cart);
 
-  // تحديث الكارت بعد الحفظ لتشمل التفاصيل المطلوبة لكل عنصر
   cart = await Cart.findById(cart._id).populate({
     path: "cartItems.product",
-    select: "title price description imageCover colors sizes Material isWishlist quantity category subCategory subSubCategory",
+    select: "title description price imageCover colors sizes Material isWishlist",
   });
 
   cart.cartItems = cart.cartItems.map(item => ({
     ...item.toObject(),
     itemId: item._id,
-    title: item.product?.title || item.title,
-    imageCover: item.product?.imageCover || item.imageCover,
+    priceTotal: Number((item.priceAfterOffer || item.price) * (item.quantity || 1)),
     description: item.product?.description || "",
-    Material: item.Material,
-    size: item.size,
-    color: item.color,
-    price: item.price,
-    priceAfterOffer: item.priceAfterOffer,
     isWishlist: item.product?.isWishlist || false,
   }));
 
@@ -245,8 +230,7 @@ exports.getLoggedUserCart = asyncHandler(async (req, res, next) => {
   });
 });
 
-
-
+// 🔄 تحديث عنصر الكارت
 exports.updateCartItem = asyncHandler(async (req, res, next) => {
   const { itemId } = req.params;
   const { quantity, color, size, material } = req.body;
@@ -264,37 +248,25 @@ exports.updateCartItem = asyncHandler(async (req, res, next) => {
   const product = await Product.findById(item.product);
   if (!product) return next(new ApiError("Product not found", 404));
 
-  // ✅ تحقق من المخزون
-  if (quantity && quantity > product.quantity) {
+  if (quantity && quantity > product.quantity)
     return next(new ApiError(`Only ${product.quantity} items available in stock`, 400));
-  }
 
-  // ✅ تحديث الخصائص
   if (quantity) item.quantity = quantity;
   if (color) item.color = color;
   if (size) item.size = size;
   if (material) item.Material = material;
 
-  // ⚙️ إعادة حساب الأسعار بعد أي تغيير و تطبيق العروض
+  item.priceTotal = Number((item.priceAfterOffer || item.price) * item.quantity); // 👈 تحديث السعر الكلي لكل عنصر
+
   await recalcCartTotals(cart);
 
-  // تحديث كل منتجات الكارت لتشمل التفاصيل المطلوبة
-  const updatedCart = await Cart.findById(cart._id).populate({
-    path: "cartItems.product",
-    select: "title price description imageCover colors sizes Material isWishlist",
-  });
+  const updatedCart = await Cart.findById(cart._id).populate("cartItems.product");
 
   updatedCart.cartItems = updatedCart.cartItems.map(item => ({
     ...item.toObject(),
     itemId: item._id,
-    title: item.product?.title || item.title,
-    imageCover: item.product?.imageCover || item.imageCover,
+    priceTotal: Number((item.priceAfterOffer || item.price) * (item.quantity || 1)),
     description: item.product?.description || "",
-    Material: item.Material,
-    size: item.size,
-    color: item.color,
-    price: item.price,
-    priceAfterOffer: item.priceAfterOffer,
     isWishlist: item.product?.isWishlist || false,
   }));
 
@@ -304,6 +276,7 @@ exports.updateCartItem = asyncHandler(async (req, res, next) => {
     data: updatedCart,
   });
 });
+
 
 
 
