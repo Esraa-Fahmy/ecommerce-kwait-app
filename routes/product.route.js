@@ -8,6 +8,7 @@ const {
   uploadProductImages,
   resizeProductImages
 } = require('../controllers/product.controller');
+const { optionalAuth } = require("../middlewares/middlewareOpyional");
 
 const Auth = require('../controllers/auth.controller');
 const {
@@ -24,7 +25,7 @@ const router = express.Router();
 // ✅ Get All Products / Create Product
 router
   .route('/')
-  .get(    Auth.protect,
+  .get(    optionalAuth,
 getAllProducts)
   .post(
     Auth.protect,
@@ -38,7 +39,7 @@ getAllProducts)
 // ✅ Get Single / Update / Delete Product
 router
   .route('/:id')
-  .get(    Auth.protect,
+  .get(    optionalAuth,
 getProductValidator, getSingleProduct)
   .put(
     Auth.protect,
