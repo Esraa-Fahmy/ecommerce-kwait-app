@@ -19,7 +19,8 @@ const cartSchema = new mongoose.Schema({
         default: 1,
       },
       price: Number, // السعر قبل الخصم
-      priceAfterOffer: Number, // السعر بعد الخصم إن وجد
+      priceAfterOffer: Number, 
+      priceTotal: Number,// السعر بعد الخصم إن وجد
     },
   ],
 
