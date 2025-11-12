@@ -1,5 +1,5 @@
 const express = require('express');
-const { getUsers, uploadUserImage, resizeImage, createUser, getUserById, updateUser, deleteUser, getLoggedUserAccount, updateLoggedUserPassword, updateLoggedUserData, deleteLoggedUserAccount } = require('../controllers/user.controller');
+const { getUsers, uploadUserImage, resizeImage, createUser, getUserById, updateUser, deleteUser, getLoggedUserAccount, updateLoggedUserPassword, updateLoggedUserData, deleteLoggedUserAccount, getAppStats } = require('../controllers/user.controller');
 const { createUserValidator, getUserValidator, updateUserValidator, deleteUserValidator, changeAccountPasswordValidator, updateLoggedUserDataValidator } = require('../validators/user.validation');
 
 
@@ -31,5 +31,7 @@ router.route('/:id')
 .get( Auth.allowedTo('admin'), getUserValidator, getUserById)
 .put( Auth.allowedTo('admin'), uploadUserImage, resizeImage, updateUserValidator , updateUser)
 .delete( Auth.allowedTo('admin'), deleteUserValidator, deleteUser);
+router.get("/stats", Auth.allowedTo("admin"), getAppStats);
+
 
 module.exports = router;  

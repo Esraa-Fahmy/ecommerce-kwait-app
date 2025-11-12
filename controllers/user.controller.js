@@ -5,6 +5,7 @@ const { v4: uuidv4 } = require('uuid');
 const sharp = require('sharp');
 const fs = require('fs');
 const bcrypt = require('bcrypt');
+const Order = require("../models/orderModel"); // تأكدي إنه مضاف فوق
 
 
 const {uploadSingleImage} = require('../middlewares/uploadImageMiddleWare');
@@ -196,5 +197,43 @@ exports.deleteLoggedUserAccount = asyncHandler(async (req, res, next) => {
   res.status(200).json({
     status: 'success',
     message: 'Your account has been deleted successfully',
+  });
+});
+
+
+
+
+
+// 📊 Get App Statistics (Admin Only)
+exports.getAppStats = asyncHandler(async (req, res, next) => {
+  // ✅ إجمالي المستخدمين
+  const totalUsers = await User.countDocuments();
+
+  // ✅ إجمالي الطلبات
+  const totalOrders = await Order.countDocuments();
+
+  // ✅ تجميع الطلبات حسب الحالة
+  const ordersByStatus = await Order.aggregate([
+    {
+      $group: {
+        _id: "$status",
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+
+  // نجهز الاستجابة بشكل منسق
+  const statusCounts = {};
+  ordersByStatus.forEach((item) => {
+    statusCounts[item._id] = item.count;
+  });
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      totalUsers,
+      totalOrders,
+      ordersByStatus: statusCounts,
+    },
   });
 });

@@ -18,7 +18,9 @@ exports.addAddress = asyncHandler(async (req, res) => {
 
 // 🟡 جلب كل العناوين الخاصة بالمستخدم
 exports.getUserAddresses = asyncHandler(async (req, res) => {
-  const addresses = await Address.find({ user: req.user._id }).sort({ createdAt: -1 });
+  const addresses = await Address.find({ user: req.user._id })
+     .populate("user", "firstName lastName email phone")
+     .sort({ createdAt: -1 });
   res.status(200).json({
     status: "success",
     results: addresses.length,
