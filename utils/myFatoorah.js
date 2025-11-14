@@ -1,5 +1,5 @@
+// utils/myfatoorah.js
 const axios = require('axios');
-const crypto = require('crypto');
 
 class MyFatoorahService {
   constructor() {
@@ -8,6 +8,7 @@ class MyFatoorahService {
     this.currency = process.env.MYFATOORAH_CURRENCY || 'KWD';
   }
 
+  // 🔹 Headers للـ API
   getHeaders() {
     return {
       'Content-Type': 'application/json',
@@ -15,86 +16,72 @@ class MyFatoorahService {
     };
   }
 
-  // 🔹 Initiate Payment
-  // 🔹 Initiate Payment (Get available methods)
-async initiatePayment(orderData) {
-  try {
+  // 🟢 بدء عملية الدفع
+  async initiatePayment(orderData) {
+    try {
+      console.log('🔵 Starting payment initiation for order:', orderData.orderId);
+      
+      const payload = {
+        InvoiceAmount: Number(orderData.total),
+        CurrencyIso: this.currency,
+        CustomerName: `${orderData.user.firstName} ${orderData.user.lastName}`,
+        CustomerEmail: orderData.user.email,
+        CustomerMobile: orderData.user.phone || '',
+        Language: 'AR',
+        DisplayCurrencyIso: this.currency,
+        MobileCountryCode: '+965',
+        CustomerReference: orderData.orderId,
+        CallBackUrl: process.env.MYFATOORAH_SUCCESS_URL,
+        ErrorUrl: process.env.MYFATOORAH_ERROR_URL,
+        UserDefinedField: JSON.stringify({
+          orderId: orderData.orderId,
+          userId: orderData.user._id.toString(),
+        }),
+        InvoiceItems: orderData.cartItems.map(item => ({
+          ItemName: item.title || 'Product',
+          Quantity: Number(item.quantity) || 1,
+          UnitPrice: Number(item.priceAfterOffer || item.price) || 0,
+        })),
+      };
 
-    const payload = {
-      InvoiceAmount: Number(orderData.total),
-      CurrencyIso: this.currency
-    };
+      console.log('📤 Sending payload to MyFatoorah:', JSON.stringify(payload, null, 2));
 
-    const response = await axios.post(
-      `${this.baseURL}/v2/InitiatePayment`,
-      payload,
-      { headers: this.getHeaders() }
-    );
+      const response = await axios.post(
+        `${this.baseURL}/v2/ExecutePayment`,
+        payload,
+        { headers: this.getHeaders() }
+      );
 
-    if (!response.data.IsSuccess) {
+      console.log('📥 MyFatoorah Response:', JSON.stringify(response.data, null, 2));
+
+      if (response.data.IsSuccess) {
+        console.log('✅ Payment URL generated successfully');
+        return {
+          success: true,
+          paymentURL: response.data.Data.PaymentURL,
+          invoiceId: response.data.Data.InvoiceId,
+        };
+      }
+
+      console.error('❌ MyFatoorah returned error:', response.data);
       return {
         success: false,
-        message: response.data.Message || "Initiate payment failed"
+        message: response.data.ValidationErrors?.[0]?.Error || response.data.Message || 'Payment initiation failed',
+      };
+    } catch (error) {
+      console.error('❌ MyFatoorah InitiatePayment Error:');
+      console.error('Status:', error.response?.status);
+      console.error('Data:', JSON.stringify(error.response?.data, null, 2));
+      console.error('Message:', error.message);
+      
+      return {
+        success: false,
+        message: error.response?.data?.Message || error.response?.data?.ValidationErrors?.[0]?.Error || 'Payment service error',
       };
     }
-
-    // ✔ هنا MyFatoorah بترجع PaymentMethods فقط
-    return {
-      success: true,
-      paymentMethods: response.data.Data.PaymentMethods
-    };
-
-  } catch (error) {
-    console.error("❌ InitiatePayment ERROR:", error.response?.data || error.message);
-    return {
-      success: false,
-      message: error.response?.data?.Message || "Payment service error"
-    };
   }
-}
 
-
-  // 🔹 Execute Payment with selected method
-  async executePayment(paymentMethodId, orderData) {
-  try {
-    const payload = {
-      PaymentMethodId: paymentMethodId,
-      InvoiceValue: Number(orderData.total),
-      CustomerName: `${orderData.user.firstName} ${orderData.user.lastName}`,
-      CustomerEmail: orderData.user.email,
-      CustomerMobile: orderData.user.phone,
-      DisplayCurrencyIso: this.currency,
-      CallBackUrl: process.env.MYFATOORAH_SUCCESS_URL,
-      ErrorUrl: process.env.MYFATOORAH_ERROR_URL,
-      CustomerReference: orderData.orderId,
-    };
-
-    const response = await axios.post(
-      `${this.baseURL}/v2/ExecutePayment`,
-      payload,
-      { headers: this.getHeaders() }
-    );
-
-    if (!response.data.IsSuccess) {
-      console.log("❌ ExecutePayment FAILED →", response.data);
-      return { success: false, message: response.data.Message };
-    }
-
-    return {
-      success: true,
-      paymentURL: response.data.Data.PaymentURL,
-      invoiceId: response.data.Data.InvoiceId,
-    };
-
-  } catch (error) {
-    console.log("❌ ExecutePayment ERROR:", error.response?.data || error.message);
-    return { success: false, message: "Payment service error" };
-  }
-}
-
-
-
-  // 🔹 Get Payment Status
+  // 🔍 التحقق من حالة الدفع
   async getPaymentStatus(paymentId) {
     try {
       const response = await axios.post(
@@ -107,7 +94,7 @@ async initiatePayment(orderData) {
         const data = response.data.Data;
         return {
           success: true,
-          status: data.InvoiceStatus,
+          status: data.InvoiceStatus, // 'Paid', 'Pending', 'Failed', etc.
           amount: data.InvoiceValue,
           reference: data.CustomerReference,
           transactionId: data.InvoiceTransactions?.[0]?.TransactionId,
@@ -116,14 +103,13 @@ async initiatePayment(orderData) {
       }
 
       return { success: false, message: 'Payment status check failed' };
-
     } catch (error) {
       console.error('❌ MyFatoorah GetPaymentStatus Error:', error.response?.data || error.message);
       return { success: false, message: 'Status check error' };
     }
   }
 
-  // 🔹 Refund Payment
+  // 💰 استرجاع المبلغ (Refund)
   async refundPayment(paymentId, amount, reason) {
     try {
       const response = await axios.post(
@@ -148,15 +134,15 @@ async initiatePayment(orderData) {
       }
 
       return { success: false, message: 'Refund failed' };
-
     } catch (error) {
       console.error('❌ MyFatoorah Refund Error:', error.response?.data || error.message);
       return { success: false, message: 'Refund error' };
     }
   }
 
-  // 🔹 Verify Webhook
+  // 🔐 التحقق من Webhook Signature (للأمان)
   verifyWebhookSignature(payload, signature) {
+    const crypto = require('crypto');
     const hash = crypto
       .createHmac('sha256', this.apiKey)
       .update(JSON.stringify(payload))
