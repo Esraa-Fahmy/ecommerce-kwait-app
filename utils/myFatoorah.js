@@ -16,68 +16,57 @@ class MyFatoorahService {
   }
 
   // 🔹 Initiate Payment
-  async initiatePayment(orderData) {
-    try {
-      const payload = {
-        InvoiceAmount: Number(orderData.total),
-        CurrencyIso: this.currency,
-        CustomerName: `${orderData.user.firstName} ${orderData.user.lastName}`,
-        CustomerEmail: orderData.user.email,
-        CustomerMobile: orderData.user.phone || '',
-        Language: 'AR',
-        DisplayCurrencyIso: this.currency,
-        CallBackUrl: process.env.MYFATOORAH_SUCCESS_URL,
-        ErrorUrl: process.env.MYFATOORAH_ERROR_URL,
-        UserDefinedField: JSON.stringify({
-          orderId: orderData.orderId,
-          userId: orderData.user._id.toString(),
-        }),
-        InvoiceItems: orderData.cartItems.map(item => ({
-          ItemName: item.title || 'Product',
-          Quantity: Number(item.quantity) || 1,
-          UnitPrice: Number(item.priceAfterOffer || item.price) || 0,
-        })),
-      };
+  // 🔹 Initiate Payment (Get available methods)
+async initiatePayment(orderData) {
+  try {
 
-      const response = await axios.post(
-        `${this.baseURL}/v2/InitiatePayment`,
-        payload,
-        { headers: this.getHeaders() }
-      );
+    const payload = {
+      InvoiceAmount: Number(orderData.total),
+      CurrencyIso: this.currency
+    };
 
-      if (!response.data.IsSuccess) {
-        return { success: false, message: response.data.Message || 'Payment initiation failed' };
-      }
+    const response = await axios.post(
+      `${this.baseURL}/v2/InitiatePayment`,
+      payload,
+      { headers: this.getHeaders() }
+    );
 
-      const paymentMethods = response.data.Data.PaymentMethods; // جميع طرق الدفع المتاحة
-
-      return {
-        success: true,
-        invoiceId: response.data.Data.InvoiceId,
-        paymentMethods,
-      };
-
-    } catch (error) {
-      console.error('❌ MyFatoorah InitiatePayment Error:', error.response?.data || error.message);
+    if (!response.data.IsSuccess) {
       return {
         success: false,
-        message: error.response?.data?.Message || 'Payment service error',
+        message: response.data.Message || "Initiate payment failed"
       };
     }
+
+    // ✔ هنا MyFatoorah بترجع PaymentMethods فقط
+    return {
+      success: true,
+      paymentMethods: response.data.Data.PaymentMethods
+    };
+
+  } catch (error) {
+    console.error("❌ InitiatePayment ERROR:", error.response?.data || error.message);
+    return {
+      success: false,
+      message: error.response?.data?.Message || "Payment service error"
+    };
   }
+}
+
 
   // 🔹 Execute Payment with selected method
-  async executePayment(invoiceId, paymentMethodId, orderData) {
+  async executePayment(paymentMethodId, orderData) {
   try {
     const payload = {
       PaymentMethodId: paymentMethodId,
-      InvoiceId: invoiceId,
+      InvoiceValue: Number(orderData.total),
       CustomerName: `${orderData.user.firstName} ${orderData.user.lastName}`,
       CustomerEmail: orderData.user.email,
-      CustomerMobile: orderData.user.phone || '',
+      CustomerMobile: orderData.user.phone,
       DisplayCurrencyIso: this.currency,
       CallBackUrl: process.env.MYFATOORAH_SUCCESS_URL,
       ErrorUrl: process.env.MYFATOORAH_ERROR_URL,
+      CustomerReference: orderData.orderId,
     };
 
     const response = await axios.post(
@@ -87,7 +76,7 @@ class MyFatoorahService {
     );
 
     if (!response.data.IsSuccess) {
-      console.log("❌ MyFatoorah FAILED →", response.data);
+      console.log("❌ ExecutePayment FAILED →", response.data);
       return { success: false, message: response.data.Message };
     }
 
@@ -97,8 +86,8 @@ class MyFatoorahService {
       invoiceId: response.data.Data.InvoiceId,
     };
 
-  } catch (err) {
-    console.log("❌ EXECUTE PAYMENT ERROR →", err.response?.data || err.message);
+  } catch (error) {
+    console.log("❌ ExecutePayment ERROR:", error.response?.data || error.message);
     return { success: false, message: "Payment service error" };
   }
 }
