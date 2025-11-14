@@ -32,7 +32,12 @@ exports.getPaymentMethods = asyncHandler(async (req, res, next) => {
 
 // 💳 بدء عملية الدفع
 exports.initiatePayment = asyncHandler(async (req, res, next) => {
-  const { orderId } = req.body;
+  const { orderId, paymentMethodId } = req.body;
+
+  // التحقق من وجود paymentMethodId
+  if (!paymentMethodId) {
+    return next(new ApiError('Payment method is required', 400));
+  }
 
   // جلب الأوردر
   const order = await Order.findById(orderId).populate('user', 'firstName lastName email phone');
@@ -56,13 +61,22 @@ exports.initiatePayment = asyncHandler(async (req, res, next) => {
     return next(new ApiError('This order cannot be paid at this stage', 400));
   }
 
-  // بدء الدفع مع MyFatoorah
-  const paymentResult = await myFatoorah.initiatePayment({
-    orderId: order._id.toString(),
-    total: order.total,
-    user: order.user,
-    cartItems: order.cartItems,
-  });
+  // بدء الدفع مع MyFatoorah - Execute Payment مباشرة
+  const paymentResult = await myFatoorah.executePayment(
+    paymentMethodId,
+    {
+      orderId: order._id.toString(),
+      total: order.total,
+      user: {
+        firstName: order.user.firstName,
+        lastName: order.user.lastName,
+        email: order.user.email,
+        phone: order.user.phone,
+        _id: order.user._id
+      },
+      cartItems: order.cartItems,
+    }
+  );
 
   if (!paymentResult.success) {
     return next(new ApiError(paymentResult.message, 400));
