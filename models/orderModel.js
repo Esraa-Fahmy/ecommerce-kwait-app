@@ -1,4 +1,4 @@
-// models/order.model.js
+// models/orderModel.js - Updated Version
 const mongoose = require('mongoose');
 
 const orderSchema = new mongoose.Schema({
@@ -28,6 +28,24 @@ const orderSchema = new mongoose.Schema({
     phone: String,
   },
   paymentMethod: { type: String, enum: ['visa', 'cod'], default: 'cod' },
+  
+  // ✨ إضافة تفاصيل الدفع
+  paymentDetails: {
+    invoiceId: String, // Invoice ID من MyFatoorah
+    transactionId: String, // Transaction ID بعد الدفع
+    status: { 
+      type: String, 
+      enum: ['pending', 'paid', 'failed', 'refunded'],
+      default: 'pending'
+    },
+    paymentMethod: String, // KNET, Visa, MasterCard, etc.
+    initiatedAt: Date,
+    paidAt: Date,
+    failedAt: Date,
+    refundId: String,
+    refundedAt: Date,
+  },
+
   shippingCost: { type: Number, default: 0 },
   coupon: { type: String },
   discountValue: { type: Number, default: 0 },

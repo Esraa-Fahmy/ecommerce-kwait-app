@@ -36,6 +36,7 @@ app.use("/api/v1/shipping", require("./routes/shippingRoute"));
 app.use("/api/v1/orders", require("./routes/orderRoute"));
 app.use("/api/v1/addresses", require("./routes/addressRoute"));
 app.use("/api/v1/notifications", require("./routes/notificationRoute"));
+app.use("/api/v1/payment", require("./routes/paymentRoute"));
 
 // Global Error Handler
 app.use(globalError);

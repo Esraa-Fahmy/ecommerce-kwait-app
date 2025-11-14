@@ -1,0 +1,26 @@
+// routes/payment.route.js
+const express = require('express');
+const router = express.Router();
+const { protect, allowedTo } = require('../controllers/auth.controller');
+const {
+  initiatePayment,
+  paymentSuccess,
+  paymentError,
+  paymentWebhook,
+  refundPayment,
+} = require('../controllers/paymentController');
+
+// 💳 بدء الدفع (User فقط)
+router.post('/initiate', protect, allowedTo("user"), initiatePayment);
+
+// ✅ Success & Error Callbacks
+router.get('/success', paymentSuccess);
+router.get('/error', paymentError);
+
+// 🔔 Webhook من MyFatoorah
+router.post('/webhook', paymentWebhook);
+
+// 🔄 Refund (Admin فقط)
+router.post('/refund', protect, allowedTo('admin'), refundPayment);
+
+module.exports = router;
