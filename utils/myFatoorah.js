@@ -87,6 +87,7 @@ class MyFatoorahService {
     );
 
     if (!response.data.IsSuccess) {
+      console.log("❌ MyFatoorah FAILED →", response.data);
       return { success: false, message: response.data.Message };
     }
 
@@ -97,10 +98,11 @@ class MyFatoorahService {
     };
 
   } catch (err) {
-    console.error("ExecutePayment Error:", err.response?.data || err.message);
+    console.log("❌ EXECUTE PAYMENT ERROR →", err.response?.data || err.message);
     return { success: false, message: "Payment service error" };
   }
 }
+
 
 
   // 🔹 Get Payment Status
