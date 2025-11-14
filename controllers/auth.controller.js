@@ -51,10 +51,8 @@ exports.login = asyncHandler(async (req, res, next) => {
 
 
 // @desc   make sure the user is logged in
-// @desc   make sure the user is logged in
 exports.protect = asyncHandler(async (req, res, next) => {
   let token;
-  
   if (req.headers.authorization && req.headers.authorization.startsWith("Bearer")) {
     token = req.headers.authorization.split(" ")[1];
   }
@@ -64,52 +62,17 @@ exports.protect = asyncHandler(async (req, res, next) => {
   }
 
   // Verify token
-  let decoded;
-  try {
-    decoded = jwt.verify(token, process.env.JWT_SECRET_KEY);
-  } catch (error) {
-    return next(new ApiError("Invalid token, please login again", 401));
-  }
+  const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY);
 
-  // Check if user exists - محسّن للسرعة
-  let currentUser;
-  try {
-    currentUser = await User.findById(decoded.userId)
-      .select('-password') // لا تجلب الـ password
-      .maxTimeMS(30000) // 30 ثانية timeout
-      .lean() // أسرع - returns plain object
-      .exec();
-  } catch (error) {
-    console.error('❌ Error in protect middleware:', error.message);
-    
-    // محاولة تانية
-    if (error.message && error.message.includes('timed out')) {
-      console.log('⚠️ Retrying user lookup...');
-      try {
-        currentUser = await User.findById(decoded.userId)
-          .select('-password')
-          .maxTimeMS(30000)
-          .lean()
-          .exec();
-      } catch (retryError) {
-        console.error('❌ Retry failed:', retryError.message);
-        return next(new ApiError("Database connection error, please try again later", 503));
-      }
-    } else {
-      return next(new ApiError("Error verifying user, please try again", 500));
-    }
-  }
-
+  // Check if user exists
+  const currentUser = await User.findById(decoded.userId);
   if (!currentUser) {
     return next(new ApiError("The user that belong to this token does no longer exist", 401));
   }
 
   // Check if password changed after token creation
   if (currentUser.passwordChangedAt) {
-    const passChangedTimestamp = parseInt(
-      new Date(currentUser.passwordChangedAt).getTime() / 1000,
-      10
-    );
+    const passChangedTimestamp = parseInt(currentUser.passwordChangedAt.getTime() / 1000, 10);
     if (passChangedTimestamp > decoded.iat) {
       return next(new ApiError("User recently changed his password. please login again..", 401));
     }
