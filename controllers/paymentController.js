@@ -28,68 +28,63 @@ exports.getPaymentMethods = asyncHandler(async (req, res, next) => {
   });
 });
 
-// 💳 Initiate Payment
+
+
+// 💳 بدء عملية الدفع
 exports.initiatePayment = asyncHandler(async (req, res, next) => {
-  const { orderId, paymentMethodId } = req.body;
+  const { orderId } = req.body;
 
+  // جلب الأوردر
   const order = await Order.findById(orderId).populate('user', 'firstName lastName email phone');
+  
+  if (!order) {
+    return next(new ApiError('Order not found', 404));
+  }
 
-  if (!order) return next(new ApiError('Order not found', 404));
-  if (order.user._id.toString() !== req.user._id.toString())
+  // التحقق إن الأوردر تابع للمستخدم الحالي
+  if (order.user._id.toString() !== req.user._id.toString()) {
     return next(new ApiError('Unauthorized access to this order', 403));
+  }
 
-  // 🔹 Fetch payment methods to check if selected method exists
-  const initResult = await myFatoorah.initiatePayment({
+  // التحقق إن طريقة الدفع visa
+  if (order.paymentMethod !== 'visa') {
+    return next(new ApiError('This order is not set for visa payment', 400));
+  }
+
+  // التحقق إن الأوردر pending
+  if (order.status !== 'pending') {
+    return next(new ApiError('This order cannot be paid at this stage', 400));
+  }
+
+  // بدء الدفع مع MyFatoorah
+  const paymentResult = await myFatoorah.initiatePayment({
     orderId: order._id.toString(),
     total: order.total,
     user: order.user,
     cartItems: order.cartItems,
   });
 
-  if (!initResult.success) return next(new ApiError(initResult.message, 400));
+  if (!paymentResult.success) {
+    return next(new ApiError(paymentResult.message, 400));
+  }
 
-  // 🔹 Validate selected PaymentMethodId
-  const method = initResult.paymentMethods.find(
-    m => m.PaymentMethodId == paymentMethodId
-  );
-
-  if (!method) return next(new ApiError("Invalid payment method", 400));
-
-  // 🔹 EXECUTE PAYMENT
-  const executeResult = await myFatoorah.executePayment(
-    initResult.invoiceId,
-    paymentMethodId,
-    {
-      orderId: order._id.toString(),
-      total: order.total,
-      user: order.user,
-      cartItems: order.cartItems,
-    }
-  );
-
-  if (!executeResult.success)
-    return next(new ApiError(executeResult.message, 400));
-
-  // 🔹 Save invoice + method
+  // حفظ Invoice ID في الأوردر
   order.paymentDetails = {
-    invoiceId: executeResult.invoiceId,
-    status: "pending",
+    invoiceId: paymentResult.invoiceId,
+    status: 'pending',
     initiatedAt: new Date(),
-    paymentMethod: method.PaymentMethodEn,
   };
   await order.save();
 
   res.status(200).json({
-    status: "success",
-    message: "Payment initiated successfully",
+    status: 'success',
+    message: 'Payment initiated successfully',
     data: {
-      paymentURL: executeResult.paymentURL,
-      invoiceId: executeResult.invoiceId,
-      paymentMethod: method.PaymentMethodEn,
+      paymentURL: paymentResult.paymentURL,
+      invoiceId: paymentResult.invoiceId,
     },
   });
 });
-
 
 // ✅ Callback من MyFatoorah بعد الدفع (Success)
 exports.paymentSuccess = asyncHandler(async (req, res, next) => {
@@ -174,7 +169,11 @@ exports.paymentError = asyncHandler(async (req, res, next) => {
     }
   }
 
-  res.redirect(`${process.env.FRONTEND_URL}/payment/failed`);
+  res.status(400).json({
+    status: 'error',
+    message: 'Payment failed',
+    data: null
+  });
 });
 
 // 🔔 Webhook من MyFatoorah (للتأكد من الدفع)
