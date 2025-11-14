@@ -6,17 +6,39 @@ const myFatoorah = require("../utils/myFatoorah");
 const { sendNotification } = require("../utils/sendNotifications");
 
 // 💳 بدء عملية الدفu
+// 💳 Get All Payment Methods From MyFatoorah
+exports.getPaymentMethods = asyncHandler(async (req, res, next) => {
+  const result = await myFatoorah.initiatePayment({
+    total: 1, // مجرد رقم تجريبي — MyFatoorah يتطلب value
+    user: req.user,
+    orderId: "temp",
+    cartItems: [],
+  });
+
+  if (!result.success) return next(new ApiError(result.message, 400));
+
+  res.status(200).json({
+    status: "success",
+    paymentMethods: result.paymentMethods.map(m => ({
+      id: m.PaymentMethodId,
+      name: m.PaymentMethodEn,
+      image: m.ImageUrl,
+      serviceCharge: m.ServiceCharge
+    }))
+  });
+});
 
 // 💳 Initiate Payment
 exports.initiatePayment = asyncHandler(async (req, res, next) => {
-  const { orderId, selectedPaymentMethod } = req.body;
+  const { orderId, paymentMethodId } = req.body;
 
   const order = await Order.findById(orderId).populate('user', 'firstName lastName email phone');
+
   if (!order) return next(new ApiError('Order not found', 404));
   if (order.user._id.toString() !== req.user._id.toString())
     return next(new ApiError('Unauthorized access to this order', 403));
 
-  // Initiate payment
+  // 🔹 Fetch payment methods to check if selected method exists
   const initResult = await myFatoorah.initiatePayment({
     orderId: order._id.toString(),
     total: order.total,
@@ -26,41 +48,48 @@ exports.initiatePayment = asyncHandler(async (req, res, next) => {
 
   if (!initResult.success) return next(new ApiError(initResult.message, 400));
 
-  // Find selected payment method
+  // 🔹 Validate selected PaymentMethodId
   const method = initResult.paymentMethods.find(
-    m => m.PaymentMethodEn.toLowerCase() === selectedPaymentMethod.toLowerCase()
+    m => m.PaymentMethodId == paymentMethodId
   );
-  if (!method) return next(new ApiError('Selected payment method not available', 400));
 
-  // Execute payment
-  const executeResult = await myFatoorah.executePayment(initResult.invoiceId, method.PaymentMethodId, {
-    orderId: order._id.toString(),
-    total: order.total,
-    user: order.user,
-    cartItems: order.cartItems,
-  });
+  if (!method) return next(new ApiError("Invalid payment method", 400));
 
-  if (!executeResult.success) return next(new ApiError(executeResult.message, 400));
+  // 🔹 EXECUTE PAYMENT
+  const executeResult = await myFatoorah.executePayment(
+    initResult.invoiceId,
+    paymentMethodId,
+    {
+      orderId: order._id.toString(),
+      total: order.total,
+      user: order.user,
+      cartItems: order.cartItems,
+    }
+  );
 
-  // Save invoice info
+  if (!executeResult.success)
+    return next(new ApiError(executeResult.message, 400));
+
+  // 🔹 Save invoice + method
   order.paymentDetails = {
     invoiceId: executeResult.invoiceId,
-    status: 'pending',
+    status: "pending",
     initiatedAt: new Date(),
-    paymentMethod: selectedPaymentMethod,
+    paymentMethod: method.PaymentMethodEn,
   };
   await order.save();
 
   res.status(200).json({
-    status: 'success',
-    message: 'Payment initiated successfully',
+    status: "success",
+    message: "Payment initiated successfully",
     data: {
       paymentURL: executeResult.paymentURL,
       invoiceId: executeResult.invoiceId,
-      selectedPaymentMethod,
+      paymentMethod: method.PaymentMethodEn,
     },
   });
 });
+
 
 // ✅ Callback من MyFatoorah بعد الدفع (Success)
 exports.paymentSuccess = asyncHandler(async (req, res, next) => {

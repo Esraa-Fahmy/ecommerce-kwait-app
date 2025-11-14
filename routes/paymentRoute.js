@@ -8,8 +8,10 @@ const {
   paymentError,
   paymentWebhook,
   refundPayment,
+  getPaymentMethods,
 } = require('../controllers/paymentController');
 
+router.get('/methods', protect, allowedTo("user"), getPaymentMethods);
 // 💳 بدء الدفع (User فقط)
 router.post('/initiate', protect, allowedTo("user"), initiatePayment);
 

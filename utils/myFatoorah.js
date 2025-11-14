@@ -68,40 +68,40 @@ class MyFatoorahService {
 
   // 🔹 Execute Payment with selected method
   async executePayment(invoiceId, paymentMethodId, orderData) {
-    try {
-      const payload = {
-        PaymentMethodId: paymentMethodId,
-        CustomerName: `${orderData.user.firstName} ${orderData.user.lastName}`,
-        CustomerEmail: orderData.user.email,
-        CustomerMobile: orderData.user.phone || '',
-        DisplayCurrencyIso: this.currency,
-        InvoiceValue: Number(orderData.total),
-        CallBackUrl: process.env.MYFATOORAH_SUCCESS_URL,
-        ErrorUrl: process.env.MYFATOORAH_ERROR_URL,
-        UserDefinedField: JSON.stringify({ orderId: orderData.orderId }),
-      };
+  try {
+    const payload = {
+      PaymentMethodId: paymentMethodId,
+      InvoiceId: invoiceId,
+      CustomerName: `${orderData.user.firstName} ${orderData.user.lastName}`,
+      CustomerEmail: orderData.user.email,
+      CustomerMobile: orderData.user.phone || '',
+      DisplayCurrencyIso: this.currency,
+      CallBackUrl: process.env.MYFATOORAH_SUCCESS_URL,
+      ErrorUrl: process.env.MYFATOORAH_ERROR_URL,
+    };
 
-      const response = await axios.post(
-        `${this.baseURL}/v2/ExecutePayment`,
-        payload,
-        { headers: this.getHeaders() }
-      );
+    const response = await axios.post(
+      `${this.baseURL}/v2/ExecutePayment`,
+      payload,
+      { headers: this.getHeaders() }
+    );
 
-      if (!response.data.IsSuccess) {
-        return { success: false, message: response.data.Message || 'Execute payment failed' };
-      }
-
-      return {
-        success: true,
-        paymentURL: response.data.Data.PaymentURL,
-        invoiceId: response.data.Data.InvoiceId,
-      };
-
-    } catch (error) {
-      console.error('❌ MyFatoorah ExecutePayment Error:', error.response?.data || error.message);
-      return { success: false, message: error.response?.data?.Message || 'Payment service error' };
+    if (!response.data.IsSuccess) {
+      return { success: false, message: response.data.Message };
     }
+
+    return {
+      success: true,
+      paymentURL: response.data.Data.PaymentURL,
+      invoiceId: response.data.Data.InvoiceId,
+    };
+
+  } catch (err) {
+    console.error("ExecutePayment Error:", err.response?.data || err.message);
+    return { success: false, message: "Payment service error" };
   }
+}
+
 
   // 🔹 Get Payment Status
   async getPaymentStatus(paymentId) {
