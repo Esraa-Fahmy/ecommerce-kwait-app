@@ -59,7 +59,11 @@ const calculateOrderTotals = async (cart, coupon, user) => {
   }
 
   const totalAfterDiscount = Math.max(totalPrice - discountValue, 0);
-  const shippingPrice = totalAfterDiscount > 500 ? 0 : 30;
+  let shippingPrice = 0;
+  if (city){
+    const shipping = await Shipping.findOne({ city });
+    shippingPrice = shipping ? shipping.cost : 0;
+  }
   const totalOrderPrice = totalAfterDiscount + shippingPrice;
 
   return {
@@ -111,7 +115,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
   const shipping = await Shipping.findOne({ city: address.city });
   const shippingCost = shipping ? shipping.cost : 0;
 
-  const totals = await calculateOrderTotals(cart, coupon, req.user);
+  const totals = await calculateOrderTotals(cart, coupon, req.user, address.city);
 
   const order = await Order.create({
     user: req.user._id,
