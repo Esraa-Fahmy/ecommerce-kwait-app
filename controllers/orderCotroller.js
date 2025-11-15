@@ -98,8 +98,7 @@ exports.previewOrder = asyncHandler(async (req, res, next) => {
 exports.createOrder = asyncHandler(async (req, res, next) => {
   const { cartId, addressId, paymentMethod = "cod", coupon } = req.body;
 
-  // التحقق من طريقة الدفع
-  if (!['cod', 'visa'].includes(paymentMethod)) {
+  if (!["cod", "visa"].includes(paymentMethod)) {
     return next(new ApiError("Invalid payment method", 400));
   }
 
@@ -114,7 +113,6 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
 
   const totals = await calculateOrderTotals(cart, coupon, req.user);
 
-  // إنشاء الأوردر
   const order = await Order.create({
     user: req.user._id,
     cart: cart._id,
@@ -126,24 +124,26 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
     shippingCost: totals.shippingPrice || shippingCost,
     total: totals.totalOrderPrice,
     coupon,
-    // ✨ تفاصيل الدفع
     paymentDetails: {
-      status: paymentMethod === 'visa' ? 'pending' : 'paid',
+      status: paymentMethod === "visa" ? "pending" : "paid",
       initiatedAt: new Date(),
-    }
+    },
   });
 
   await order.populate("user", "firstName lastName email phone");
 
-  // 🔄 تعديل الكميات في المنتجات (فقط لو COD)
-  if (paymentMethod === 'cod') {
-    for (const item of cart.cartItems) {
+  // ----------------------------
+  // ✅ تفريغ الكارت فوراً بعد إنشاء الأوردر
+  // ----------------------------
+  await Cart.findByIdAndDelete(cart._id);
+
+  // لو COD خصم الكميات
+  if (paymentMethod === "cod") {
+    for (const item of order.cartItems) {
       await Product.findByIdAndUpdate(item.product._id, {
         $inc: { quantity: -item.quantity, sold: item.quantity },
       });
     }
-    // حذف الكارت
-    await Cart.findByIdAndDelete(cart._id);
 
     await sendNotification(
       req.user._id,
@@ -153,16 +153,17 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
     );
   }
 
-  // لو Visa، نرجع Order ID علشان يكمل الدفع
   res.status(201).json({
     status: "success",
-    message: paymentMethod === 'visa' 
-      ? "Order created. Please complete payment."
-      : totals.couponMessage || "Order created successfully",
+    message:
+      paymentMethod === "visa"
+        ? "Order created. Please complete payment."
+        : totals.couponMessage || "Order created successfully",
     data: order,
-    requiresPayment: paymentMethod === 'visa',
+    requiresPayment: paymentMethod === "visa",
   });
 });
+
 
 // =============================
 // 📋 GET USER ORDERS

@@ -10,10 +10,11 @@ const {
   refundPayment,
   getPaymentMethods,
 } = require('../controllers/paymentController');
+const { initiatePaymentValidator } = require('../validators/payment');
 
 router.get('/methods', protect, allowedTo("user"), getPaymentMethods);
 // 💳 بدء الدفع (User فقط)
-router.post('/initiate', protect, allowedTo("user"), initiatePayment);
+router.post('/initiate', protect, allowedTo("user"), initiatePaymentValidator, initiatePayment);
 
 // ✅ Success & Error Callbacks
 router.get('/success', paymentSuccess);

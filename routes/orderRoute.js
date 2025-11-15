@@ -9,7 +9,9 @@ const {
   cancelOrder,
 } = require("../controllers/orderCotroller");
 
+
 const { protect, allowedTo } = require("../controllers/auth.controller");
+const { createOrderValidator } = require("../validators/orderValidation");
 
 const router = express.Router();
 
@@ -22,7 +24,7 @@ router.post("/preview",  protect, allowedTo("user"), previewOrder);
 // =============================
 // ✅ Create Order (إنشاء أوردر جديد)
 // =============================
-router.post("/",  protect, allowedTo("user"), createOrder);
+router.post("/",  protect, allowedTo("user"), createOrderValidator, createOrder);
 
 // =============================
 // 📋 Get User Orders (كل أوردرات المستخدم)

@@ -144,13 +144,29 @@ exports.addToCart = asyncHandler(async (req, res, next) => {
       ],
     });
   } else {
-    const itemIndex = cart.cartItems.findIndex((item) => {
-      const sameProduct = item.product._id ? item.product._id.toString() === productId : item.product.toString() === productId;
-      const sameColor = (item.color || "") === (color || "");
-      const sameSize = (item.size || "") === (size || "");
-      const sameMaterial = (item.Material || "") === (material || "");
-      return sameProduct && sameColor && sameSize && sameMaterial;
-    });
+  const itemIndex = cart.cartItems.findIndex((item) => {
+  const sameProduct =
+    (item.product?._id?.toString() || item.product.toString()) === productId;
+
+  // لو المنتج مفيهوش ألوان → تجاهل مقارنة اللون
+  const sameColor = Array.isArray(product.colors) && product.colors.length > 0
+    ? (item.color || "") === (color || "")
+    : true;
+
+  // لو المنتج مفيهوش مقاسات → تجاهل مقارنة المقاس
+  const sameSize = Array.isArray(product.sizes) && product.sizes.length > 0
+    ? (item.size || "") === (size || "")
+    : true;
+
+  // لو المنتج مفيهوش Material → تجاهل المقارنة
+  const sameMaterial = Array.isArray(product.Material) && product.Material.length > 0
+    ? (item.Material || "") === (material || "")
+    : true;
+
+  return sameProduct && sameColor && sameSize && sameMaterial;
+});
+
+
 
     if (itemIndex > -1) {
       const existing = cart.cartItems[itemIndex];

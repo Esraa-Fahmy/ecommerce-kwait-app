@@ -1,5 +1,6 @@
 // models/orderModel.js - Updated Version
 const mongoose = require('mongoose');
+const Joi = require("joi");
 
 const orderSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.ObjectId, ref: 'User', required: true },
@@ -27,7 +28,7 @@ const orderSchema = new mongoose.Schema({
     notes: String,
     phone: String,
   },
-  paymentMethod: { type: String, enum: ['visa', 'cod'], default: 'cod' },
+  paymentMethod: { type: String, enum: ['visa', 'cod'], required: true },
   
   // ✨ إضافة تفاصيل الدفع
   paymentDetails: {
@@ -63,3 +64,4 @@ const orderSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 module.exports = mongoose.model('Order', orderSchema);
+
