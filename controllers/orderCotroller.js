@@ -10,7 +10,7 @@ const Shipping = require("../models/shippingModel");
 const { sendNotification } = require("../utils/sendNotifications");
 
 // 🧮 Helper: حساب الإجماليات
-const calculateOrderTotals = async (cart, coupon, user) => {
+const calculateOrderTotals = async (cart, coupon, user, city) => {
   let discountValue = 0;
   let totalPrice = 0;
   let couponMessage = null;
