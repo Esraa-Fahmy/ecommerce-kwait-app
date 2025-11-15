@@ -57,7 +57,7 @@ class MyFatoorahService {
       console.log('PaymentMethodId:', paymentMethodId);
       console.log('Order Total:', orderData.total);
       
-      // تنظيف رقم الموبايل - إزالة +965 وأي مسافات
+      // تنظيف رقم الموبايل
       let cleanMobile = (orderData.user.phone || '').replace(/\D/g, '');
       
       if (cleanMobile.startsWith('965')) {
@@ -69,6 +69,38 @@ class MyFatoorahService {
       }
       
       console.log('📱 Cleaned mobile:', cleanMobile);
+      
+      // ✅ إنشاء InvoiceItems مع الشحن والخصم
+      const invoiceItems = [];
+      
+      // إضافة المنتجات
+      if (orderData.cartItems && orderData.cartItems.length > 0) {
+        orderData.cartItems.forEach(item => {
+          invoiceItems.push({
+            ItemName: item.title || 'Product',
+            Quantity: Number(item.quantity) || 1,
+            UnitPrice: Number(item.priceAfterOffer || item.price) || 0,
+          });
+        });
+      }
+      
+      // ✅ إضافة الشحن كسطر منفصل
+      if (orderData.shippingCost && orderData.shippingCost > 0) {
+        invoiceItems.push({
+          ItemName: 'Shipping Cost',
+          Quantity: 1,
+          UnitPrice: Number(orderData.shippingCost),
+        });
+      }
+      
+      // ✅ إضافة الخصم كسطر منفصل (سالب)
+      if (orderData.discountValue && orderData.discountValue > 0) {
+        invoiceItems.push({
+          ItemName: 'Discount',
+          Quantity: 1,
+          UnitPrice: -Number(orderData.discountValue),
+        });
+      }
       
       const payload = {
         PaymentMethodId: Number(paymentMethodId),
@@ -82,6 +114,7 @@ class MyFatoorahService {
         CustomerReference: orderData.orderId,
         Language: 'AR',
         MobileCountryCode: '+965',
+        InvoiceItems: invoiceItems,  // ✅ مع الشحن والخصم
       };
 
       console.log('📤 Payload:', JSON.stringify(payload, null, 2));

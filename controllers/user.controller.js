@@ -228,12 +228,178 @@ exports.getAppStats = asyncHandler(async (req, res, next) => {
     statusCounts[item._id] = item.count;
   });
 
+  // ✅ إحصائيات المدفوعات
+  const paymentStats = await Order.aggregate([
+    {
+      $match: {
+        paymentMethod: 'visa',
+        'paymentDetails.status': 'paid'  // فقط المدفوعات الناجحة
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        totalPaidOrders: { $sum: 1 },           // عدد الطلبات المدفوعة
+        totalRevenue: { $sum: '$total' },       // إجمالي المبلغ المدفوع
+        totalShipping: { $sum: '$shippingCost' }, // إجمالي الشحن
+        totalDiscount: { $sum: '$discountValue' }, // إجمالي الخصومات
+      }
+    }
+  ]);
+
+  // ✅ إحصائيات COD (فقط المُسلّمة)
+  const codStats = await Order.aggregate([
+    {
+      $match: {
+        paymentMethod: 'cod',
+        status: 'delivered'  // ✅ فقط المُسلّمة
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        totalCODOrders: { $sum: 1 },
+        totalCODRevenue: { $sum: '$total' },
+      }
+    }
+  ]);
+
+  // ✅ تجميع حسب طريقة الدفع
+  const paymentMethodStats = await Order.aggregate([
+    {
+      $match: {
+        $or: [
+          { paymentMethod: 'visa', 'paymentDetails.status': 'paid' },
+          { paymentMethod: 'cod', status: 'delivered' }  // ✅ فقط المُسلّمة
+        ]
+      }
+    },
+    {
+      $group: {
+        _id: '$paymentMethod',
+        count: { $sum: 1 },
+        totalAmount: { $sum: '$total' }
+      }
+    }
+  ]);
+
+  // ✅ إحصائيات المبالغ المستردة
+  const refundStats = await Order.aggregate([
+    {
+      $match: {
+        'paymentDetails.status': 'refunded'
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        totalRefundedOrders: { $sum: 1 },
+        totalRefundedAmount: { $sum: '$total' }
+      }
+    }
+  ]);
+
+  // ✅ إحصائيات حسب الأسبوع الحالي
+  const oneWeekAgo = new Date();
+  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+  const weeklyStats = await Order.aggregate([
+    {
+      $match: {
+        createdAt: { $gte: oneWeekAgo },
+        $or: [
+          { paymentMethod: 'visa', 'paymentDetails.status': 'paid' },
+          { paymentMethod: 'cod', status: 'delivered' }  // ✅ فقط المُسلّمة
+        ]
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        weeklyOrders: { $sum: 1 },
+        weeklyRevenue: { $sum: '$total' }
+      }
+    }
+  ]);
+
+  // ✅ إحصائيات حسب الشهر الحالي
+  const oneMonthAgo = new Date();
+  oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+
+  const monthlyStats = await Order.aggregate([
+    {
+      $match: {
+        createdAt: { $gte: oneMonthAgo },
+        $or: [
+          { paymentMethod: 'visa', 'paymentDetails.status': 'paid' },
+          { paymentMethod: 'cod', status: 'delivered' }  // ✅ فقط المُسلّمة
+        ]
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        monthlyOrders: { $sum: 1 },
+        monthlyRevenue: { $sum: '$total' }
+      }
+    }
+  ]);
+
   res.status(200).json({
     status: "success",
     data: {
+      // معلومات عامة
       totalUsers,
       totalOrders,
       ordersByStatus: statusCounts,
+
+      // إحصائيات المدفوعات
+      payments: {
+        // Visa Payments
+        visa: {
+          totalOrders: paymentStats[0]?.totalPaidOrders || 0,
+          totalRevenue: paymentStats[0]?.totalRevenue || 0,
+          totalShipping: paymentStats[0]?.totalShipping || 0,
+          totalDiscount: paymentStats[0]?.totalDiscount || 0,
+        },
+        
+        // COD Payments
+        cod: {
+          totalOrders: codStats[0]?.totalCODOrders || 0,
+          totalRevenue: codStats[0]?.totalCODRevenue || 0,
+        },
+
+        // المجموع الكلي
+        total: {
+          totalOrders: (paymentStats[0]?.totalPaidOrders || 0) + (codStats[0]?.totalCODOrders || 0),
+          totalRevenue: (paymentStats[0]?.totalRevenue || 0) + (codStats[0]?.totalCODRevenue || 0),
+        },
+
+        // حسب طريقة الدفع
+        byMethod: paymentMethodStats.map(item => ({
+          method: item._id,
+          count: item.count,
+          totalAmount: item.totalAmount
+        })),
+
+        // المبالغ المستردة
+        refunds: {
+          totalOrders: refundStats[0]?.totalRefundedOrders || 0,
+          totalAmount: refundStats[0]?.totalRefundedAmount || 0,
+        },
+      },
+
+      // إحصائيات زمنية
+      timeBasedStats: {
+        weekly: {
+          orders: weeklyStats[0]?.weeklyOrders || 0,
+          revenue: weeklyStats[0]?.weeklyRevenue || 0,
+        },
+        monthly: {
+          orders: monthlyStats[0]?.monthlyOrders || 0,
+          revenue: monthlyStats[0]?.monthlyRevenue || 0,
+        }
+      }
     },
   });
 });
