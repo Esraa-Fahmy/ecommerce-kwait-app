@@ -58,7 +58,7 @@ exports.protect = asyncHandler(async (req, res, next) => {
   }
 
   if (!token) {
-    return next(new ApiError("You are not login, Please login to get access this route", 401));
+     return next(new ApiError("غير مسموح بالوصول ، من فضلك سجّل الدخول أولاً.", 401));
   }
 
   // Verify token
