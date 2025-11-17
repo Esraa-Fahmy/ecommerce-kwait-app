@@ -215,13 +215,25 @@ exports.addToCart = asyncHandler(async (req, res, next) => {
 });
 
 // 🟡 جلب كارت المستخدم
+// 🟡 جلب كارت المستخدم
 exports.getLoggedUserCart = asyncHandler(async (req, res, next) => {
   let cart = await Cart.findOne({ user: req.user._id }).populate({
     path: "cartItems.product",
     select: "title description price imageCover colors sizes Material isWishlist",
   });
 
-  if (!cart) return res.status(200).json({ status: "success", results: 0, data: null });
+  // ✅ لو مفيش كارت خالص، ارجع array فاضي
+  if (!cart) {
+    return res.status(200).json({ 
+      status: "success", 
+      results: 0, 
+      data: {
+        cartItems: [],
+        totalCartPrice: 0,
+        totalPriceAfterDiscount: 0
+      }
+    });
+  }
 
   await removeOutOfStockItems(cart);
   await recalcCartTotals(cart);
@@ -230,6 +242,19 @@ exports.getLoggedUserCart = asyncHandler(async (req, res, next) => {
     path: "cartItems.product",
     select: "title description price imageCover colors sizes Material isWishlist",
   });
+
+  // ✅ لو الكارت موجود بس فاضي، ارجع array فاضي
+  if (!cart.cartItems || cart.cartItems.length === 0) {
+    return res.status(200).json({
+      status: "success",
+      results: 0,
+      data: {
+        cartItems: [],
+        totalCartPrice: 0,
+        totalPriceAfterDiscount: 0
+      }
+    });
+  }
 
   cart.cartItems = cart.cartItems.map(item => ({
     ...item.toObject(),
