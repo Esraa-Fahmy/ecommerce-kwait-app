@@ -30,7 +30,7 @@ exports.getProductRatings = asyncHandler(async (req, res, next) => {
   const { productId } = req.params;
 
   const ratings = await Review.find({ product: productId })
-    .populate('user', 'firstName lastName');
+    .populate('user', 'firstName lastName profileImg');
 
   res.status(200).json({
     status: 'success',
