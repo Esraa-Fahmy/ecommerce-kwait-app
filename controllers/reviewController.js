@@ -13,9 +13,15 @@ exports.addProductRating = asyncHandler(async (req, res, next) => {
     user: req.user._id,
   });
 
+  const populatedRating = await Review.findById(newRating._id)
+    .populate({
+      path: 'user',
+      select: 'firstName lastName profileImg', // الحاجات اللي عايزاها
+    });
+
   res.status(201).json({
     status: 'success',
-    data: newRating,
+    data: populatedRating,
   });
 });
 
