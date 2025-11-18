@@ -17,8 +17,8 @@ router.get('/methods', protect, allowedTo("user"), getPaymentMethods);
 router.post('/initiate', protect, allowedTo("user"), initiatePaymentValidator, initiatePayment);
 
 // ✅ Success & Error Callbacks
-router.get('/:paymentId/success', paymentSuccess);
-router.get('/:paymentId/error', paymentError);
+router.get('/success', paymentSuccess);
+router.get('/error', paymentError);
 
 // 🔔 Webhook من MyFatoorah
 router.post('/webhook', paymentWebhook);
