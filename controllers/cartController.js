@@ -26,7 +26,9 @@ const applyOffersOnItem = async (item) => {
   if (!product) return item;
 
   const now = new Date();
-  const offers = await Offer.find({
+  
+  // ✅ البحث عن العروض النشطة (بدأت بالفعل)
+  const activeOffers = await Offer.find({
     isActive: true,
     startDate: { $lte: now },
     endDate: { $gte: now },
@@ -38,10 +40,31 @@ const applyOffersOnItem = async (item) => {
     ],
   }).sort({ priority: -1 });
 
-  let finalPrice = Number(product.price) || 0;
+  // ✅ البحث عن العروض القادمة (لم تبدأ بعد)
+  const upcomingOffers = await Offer.find({
+    isActive: true,
+    startDate: { $gt: now },
+    endDate: { $gte: now },
+    $or: [
+      { targetType: "product", targetIds: product._id },
+      { targetType: "subcategory", targetIds: product.subCategory },
+      { targetType: "subSubcategory", targetIds: product.subSubCategory },
+      { targetType: "category", targetIds: product.category },
+    ],
+  }).sort({ startDate: 1 });
 
-  if (offers.length > 0) {
-    const offer = offers[0];
+  let finalPrice = Number(product.price) || 0;
+  let appliedOffer = null;
+
+  if (activeOffers.length > 0) {
+    const offer = activeOffers[0];
+    appliedOffer = {
+      _id: offer._id,
+      title: offer.title,
+      offerType: offer.offerType,
+      discountValue: offer.discountValue,
+    };
+
     if (offer.offerType === "percentage" && typeof offer.discountValue === "number") {
       finalPrice = product.price - (product.price * offer.discountValue) / 100;
     } else if (offer.offerType === "fixed" && typeof offer.discountValue === "number") {
@@ -52,9 +75,15 @@ const applyOffersOnItem = async (item) => {
       typeof offer.getQuantity === "number" &&
       item.quantity >= offer.buyQuantity
     ) {
+      appliedOffer.buyQuantity = offer.buyQuantity;
+      appliedOffer.getQuantity = offer.getQuantity;
+      
       const freeItems = Math.floor(item.quantity / (offer.buyQuantity + offer.getQuantity)) * offer.getQuantity;
       const paidItems = item.quantity - freeItems;
       finalPrice = paidItems > 0 ? (paidItems * product.price) / item.quantity : 0;
+      
+      appliedOffer.freeItems = freeItems;
+      appliedOffer.paidItems = paidItems;
     }
   }
 
@@ -70,6 +99,24 @@ const applyOffersOnItem = async (item) => {
 
   // ✅ السعر الكلي حسب الكمية لكل عنصر
   item.priceTotal = Number(item.priceAfterOffer * item.quantity);
+
+  // ✅ معلومات العروض
+  if (appliedOffer) {
+    item.appliedOffer = appliedOffer;
+  }
+  
+  if (upcomingOffers.length > 0) {
+    item.upcomingOffers = upcomingOffers.map(offer => ({
+      _id: offer._id,
+      title: offer.title,
+      offerType: offer.offerType,
+      startDate: offer.startDate,
+      endDate: offer.endDate,
+      discountValue: offer.discountValue,
+      buyQuantity: offer.buyQuantity,
+      getQuantity: offer.getQuantity,
+    }));
+  }
 
   // attach product snapshot
   item.product = product;
