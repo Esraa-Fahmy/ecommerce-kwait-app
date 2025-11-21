@@ -15,6 +15,12 @@ const orderSchema = new mongoose.Schema({
       quantity: Number,
       price: Number,
       priceAfterOffer: Number,
+      
+      // ✅ معلومات العرض المطبق
+      appliedOffer: {
+        type: mongoose.Schema.Types.Mixed,
+        default: null,
+      },
     }
   ],
   address: {

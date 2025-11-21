@@ -21,6 +21,18 @@ const cartSchema = new mongoose.Schema({
       price: Number, // السعر قبل الخصم
       priceAfterOffer: Number, 
       priceTotal: Number,// السعر بعد الخصم إن وجد
+      
+      // ✅ معلومات العرض المطبق
+      appliedOffer: {
+        type: mongoose.Schema.Types.Mixed,
+        default: null,
+      },
+      
+      // ✅ العروض القادمة
+      upcomingOffers: {
+        type: [mongoose.Schema.Types.Mixed],
+        default: [],
+      },
     },
   ],
 
