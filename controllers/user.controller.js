@@ -10,6 +10,8 @@ const Order = require("../models/orderModel"); // تأكدي إنه مضاف ف�
 
 const {uploadSingleImage} = require('../middlewares/uploadImageMiddleWare');
 const createToken = require("../utils/createToken");
+const cartModel = require("../models/cartModel");
+const offerModel = require("../models/offer.model");
 
 // Upload single image
 exports.uploadUserImage = uploadSingleImage('profileImg');
@@ -403,3 +405,11 @@ exports.getAppStats = asyncHandler(async (req, res, next) => {
     },
   });
 });
+
+
+
+
+
+
+
+

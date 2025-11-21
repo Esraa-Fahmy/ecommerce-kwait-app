@@ -26,6 +26,7 @@ const cartSchema = new mongoose.Schema({
 
   totalCartPrice: Number,
   totalPriceAfterDiscount: Number,
+  hasFreeShipping: { type: Boolean, default: false }, // للشحن المجاني
 
   user: {
     type: mongoose.Schema.ObjectId,

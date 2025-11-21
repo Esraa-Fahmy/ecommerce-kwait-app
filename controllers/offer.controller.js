@@ -1,8 +1,10 @@
 const asyncHandler = require("express-async-handler");
 const ApiError = require("../utils/apiError");
 const OfferModel = require("../models/offer.model");
-  const { sendNotification } = require("../utils/sendNotifications");
+const { sendNotification } = require("../utils/sendNotifications");
 const User = require("../models/user.model");
+const Cart = require("../models/cartModel");
+
 // ============================
 // ✅ Get All Offers
 // ============================
@@ -89,4 +91,68 @@ exports.deleteOffer = asyncHandler(async (req, res, next) => {
   const offer = await OfferModel.findByIdAndDelete(id);
   if (!offer) return next(new ApiError(`No offer found for this id ${id}`, 404));
   res.status(200).json({ message: "Offer deleted successfully" });
+});
+
+// ============================
+// ✅ Validate Coupon
+// ============================
+exports.validateCoupon = asyncHandler(async (req, res, next) => {
+  const { couponCode, cartId } = req.body;
+
+  if (!couponCode) {
+    return next(new ApiError("Coupon code is required", 400));
+  }
+
+  const coupon = await OfferModel.findOne({ couponCode, offerType: "coupon", isActive: true });
+  if (!coupon) {
+    return res.status(400).json({
+      status: "error",
+      message: "❌ هذا الكود غير صالح أو غير موجود."
+    });
+  }
+
+  const now = new Date();
+  if (coupon.startDate > now) {
+    return res.status(400).json({
+      status: "error",
+      message: "⚠️ هذا الكود لم يبدأ بعد."
+    });
+  }
+  if (coupon.endDate < now) {
+    return res.status(400).json({
+      status: "error",
+      message: "⚠️ انتهت صلاحية هذا الكود."
+    });
+  }
+
+  // ✅ حساب الخصم على السلة
+  let totalDiscount = 0;
+  let totalPrice = 0;
+  
+  if (cartId) {
+    const cart = await Cart.findById(cartId).populate("cartItems.product");
+    if (!cart) return next(new ApiError("Cart not found", 404));
+
+    // ✅ استخدام priceAfterOffer بدلاً من السعر الأصلي
+    for (const item of cart.cartItems) {
+      const itemPrice = item.priceAfterOffer || item.price || 0;
+      totalPrice += itemPrice * item.quantity;
+    }
+
+    if (coupon.discountValue) {
+      totalDiscount = totalPrice * (coupon.discountValue / 100);
+    }
+  }
+
+  res.status(200).json({
+    status: "success",
+    message: `✅ الكوبون صالح! خصم ${coupon.discountValue}%`,
+    data: {
+      couponCode: coupon.couponCode,
+      discountPercentage: coupon.discountValue,
+      discountAmount: totalDiscount,
+      totalBeforeDiscount: totalPrice,
+      totalAfterDiscount: totalPrice - totalDiscount
+    }
+  });
 });

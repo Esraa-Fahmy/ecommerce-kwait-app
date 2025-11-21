@@ -110,6 +110,10 @@ exports.createOfferValidator = [
     }
     return true;
   }),
+  check("discountValue")
+  .if((value, { req }) => req.body.offerType === "coupon" || req.body.offerType === "percentage" || req.body.offerType === "fixed")
+  .notEmpty()
+  .withMessage("Discount value must be provided for this offer type"),
   check("startDate").notEmpty().withMessage("Offer start date is required").isISO8601(),
   check("endDate").notEmpty().withMessage("Offer end date is required").isISO8601(),
   validatorMiddleware,

@@ -21,8 +21,6 @@ router.delete('/deleteMyAcc', deleteLoggedUserAccount)
 
 
 
-
-
 // admin
 router.route('/')
 .get( Auth.allowedTo('admin'), getUsers)
@@ -35,4 +33,4 @@ router.route('/:id')
 
 
 
-module.exports = router;  
+module.exports = router;

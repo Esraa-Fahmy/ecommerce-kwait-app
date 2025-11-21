@@ -82,6 +82,7 @@ const recalcCartTotals = async (cart) => {
   let totalPrice = 0;
   let totalAfter = 0;
 
+  // حساب إجمالي المنتجات بعد تطبيق العروض على كل منتج
   for (let i = 0; i < cart.cartItems.length; i++) {
     const item = cart.cartItems[i];
     const updatedItem = await applyOffersOnItem(item);
@@ -95,8 +96,48 @@ const recalcCartTotals = async (cart) => {
     }
   }
 
+  // ✅ البحث عن عروض على مستوى السلة (cartDiscount, freeShipping)
+  const now = new Date();
+  const cartOffers = await Offer.find({
+    isActive: true,
+    startDate: { $lte: now },
+    endDate: { $gte: now },
+    targetType: "cart",
+    $or: [
+      { offerType: "cartDiscount" },
+      { offerType: "freeShipping" }
+    ]
+  }).sort({ priority: -1 });
+
+  let cartDiscountValue = 0;
+  let hasFreeShipping = false;
+
+  if (cartOffers.length > 0) {
+    for (const offer of cartOffers) {
+      // تطبيق خصم السلة
+      if (offer.offerType === "cartDiscount") {
+        // التحقق من الحد الأدنى لقيمة السلة
+        if (!offer.minCartValue || totalAfter >= offer.minCartValue) {
+          if (offer.discountValue) {
+            cartDiscountValue = totalAfter * (offer.discountValue / 100);
+          }
+        }
+      }
+      // تطبيق الشحن المجاني
+      else if (offer.offerType === "freeShipping") {
+        if (!offer.minCartValue || totalAfter >= offer.minCartValue) {
+          hasFreeShipping = true;
+        }
+      }
+    }
+  }
+
+  // تطبيق خصم السلة على الإجمالي
+  totalAfter = Math.max(totalAfter - cartDiscountValue, 0);
+
   cart.totalCartPrice = Number(totalAfter) || 0;
   cart.totalPriceAfterDiscount = Number(totalAfter) || 0;
+  cart.hasFreeShipping = hasFreeShipping; // حفظ حالة الشحن المجاني
   await cart.save();
 };
 

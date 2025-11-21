@@ -34,4 +34,9 @@ router.put("/:id",    Auth.protect,
 router.delete("/:id",    Auth.protect,
     Auth.allowedTo('admin'), deleteOfferValidator, offerController.deleteOffer);
 
+// ============================
+// 🟢 Validate Coupon (User)
+// ============================
+router.post("/validate-coupon", Auth.protect, offerController.validateCoupon);
+
 module.exports = router;

@@ -15,24 +15,14 @@ const calculateOrderTotals = async (cart, coupon, user, city) => {
   let totalPrice = 0;
   let couponMessage = null;
 
+  // ✅ استخدام priceAfterOffer من السلة (يحتوي على كل العروض: percentage, fixed, buyXgetY)
   for (const item of cart.cartItems) {
-    let productPrice = item.product.price;
-
-    if (item.product.offer && item.product.offer.isActive) {
-      const now = new Date();
-      if (item.product.offer.startDate <= now && item.product.offer.endDate >= now) {
-        if (item.product.offer.offerType === "percentage") {
-          const discount = (productPrice * item.product.offer.discountValue) / 100;
-          productPrice -= discount;
-        } else if (item.product.offer.offerType === "fixed") {
-          productPrice -= item.product.offer.discountValue;
-        }
-      }
-    }
-
-    totalPrice += productPrice * item.quantity;
+    // استخدام priceAfterOffer إذا كان موجود، وإلا استخدام السعر العادي
+    const itemPrice = item.priceAfterOffer || item.price || 0;
+    totalPrice += itemPrice * item.quantity;
   }
 
+  // ✅ تطبيق كوبون الخصم (إن وجد)
   if (coupon) {
     const offer = await Offer.findOne({ couponCode: coupon });
     const now = new Date();
@@ -45,12 +35,13 @@ const calculateOrderTotals = async (cart, coupon, user, city) => {
       couponMessage = "⚠️ هذا الكود لم يبدأ بعد.";
     } else if (offer.endDate < now) {
       couponMessage = "⚠️ انتهت صلاحية هذا الكود.";
-    } else if (offer.targetType !== "cart") {
-      couponMessage = "⚠️ هذا الكود غير مخصص لتطبيقه على السلة.";
+    } else if (offer.offerType !== "coupon" && offer.offerType !== "percentage" && offer.offerType !== "fixed") {
+      couponMessage = "⚠️ هذا الكود غير صالح للسلة.";
     } else {
+      // ✅ تطبيق الخصم
       if (offer.offerType === "coupon" || offer.offerType === "percentage") {
-        discountValue = totalPrice * offer.discountValue;
-        couponMessage = `✅ تم تطبيق خصم بنسبة ${(offer.discountValue * 100).toFixed(0)}%.`;
+        discountValue = totalPrice * (offer.discountValue / 100);
+        couponMessage = `✅ تم تطبيق خصم بنسبة ${offer.discountValue}%.`;
       } else if (offer.offerType === "fixed") {
         discountValue = offer.discountValue;
         couponMessage = `✅ تم تطبيق خصم بقيمة ${offer.discountValue} د.ك.`;
@@ -59,11 +50,39 @@ const calculateOrderTotals = async (cart, coupon, user, city) => {
   }
 
   const totalAfterDiscount = Math.max(totalPrice - discountValue, 0);
+  
+  // ✅ حساب تكلفة الشحن (مع التحقق من الشحن المجاني)
   let shippingPrice = 0;
-  if (city){
+  let hasFreeShipping = cart.hasFreeShipping || false;
+
+  // التحقق من عروض الشحن المجاني على مستوى الأوردر
+  if (!hasFreeShipping && city) {
+    const now = new Date();
+    const freeShippingOffer = await Offer.findOne({
+      isActive: true,
+      startDate: { $lte: now },
+      endDate: { $gte: now },
+      offerType: "freeShipping",
+      $or: [
+        { targetType: "cart" },
+        { targetType: "order" }
+      ]
+    });
+
+    if (freeShippingOffer) {
+      // التحقق من الحد الأدنى لقيمة السلة
+      if (!freeShippingOffer.minCartValue || totalAfterDiscount >= freeShippingOffer.minCartValue) {
+        hasFreeShipping = true;
+      }
+    }
+  }
+
+  // حساب تكلفة الشحن إذا لم يكن مجاني
+  if (!hasFreeShipping && city) {
     const shipping = await Shipping.findOne({ city });
     shippingPrice = shipping ? shipping.cost : 0;
   }
+
   const totalOrderPrice = totalAfterDiscount + shippingPrice;
 
   return {
@@ -72,6 +91,7 @@ const calculateOrderTotals = async (cart, coupon, user, city) => {
     shippingPrice,
     totalOrderPrice,
     couponMessage,
+    hasFreeShipping,
   };
 };
 
@@ -157,15 +177,27 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
     );
   }
 
+  let orderResponse = order.toObject(); // تحويل الـ mongoose document إلى object
+
+  // تحويل product من object كامل إلى id فقط
+  orderResponse.cartItems = orderResponse.cartItems.map(item => ({
+    ...item,
+    product: item.product._id || item.product
+  }));
+
+  // ✅ إزالة paymentDetails في حالة COD
+  if (paymentMethod === "cod") {
+    const { paymentDetails, ...orderWithoutPaymentDetails } = orderResponse;
+    orderResponse = orderWithoutPaymentDetails;
+  }
+
   res.status(201).json({
     status: "success",
-    message:
-      paymentMethod === "visa"
-        ? "Order created. Please complete payment."
-        : totals.couponMessage || "Order created successfully",
-    data: order,
+    message: paymentMethod === "visa" ? "Order created. Please complete payment." : totals.couponMessage || "Order created successfully",
+    data: orderResponse,
     requiresPayment: paymentMethod === "visa",
   });
+
 });
 
 

@@ -1,6 +1,5 @@
 // models/orderModel.js - Updated Version
 const mongoose = require('mongoose');
-const Joi = require("joi");
 
 const orderSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.ObjectId, ref: 'User', required: true },
