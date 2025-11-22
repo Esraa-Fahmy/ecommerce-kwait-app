@@ -40,8 +40,16 @@ const calculateOrderTotals = async (cart, coupon, user, city) => {
     } else {
       // ✅ تطبيق الخصم
       if (offer.offerType === "coupon" || offer.offerType === "percentage") {
-        discountValue = totalPrice * (offer.discountValue / 100);
-        couponMessage = `✅ تم تطبيق خصم بنسبة ${offer.discountValue}%.`;
+        // ✅ دعم النسب العشرية: لو القيمة أقل من 1، اضربها في 100 عشان تبقى نسبة مئوية
+        // مثال: 0.1 → 10%، 0.25 → 25%
+        // لو القيمة 1 أو أكبر، استخدمها مباشرة كنسبة مئوية
+        // مثال: 10 → 10%، 25 → 25%
+        const discountPercentage = offer.discountValue < 1 
+          ? offer.discountValue * 100 
+          : offer.discountValue;
+        
+        discountValue = totalPrice * (discountPercentage / 100);
+        couponMessage = `✅ تم تطبيق خصم بنسبة ${discountPercentage}%.`;
       } else if (offer.offerType === "fixed") {
         discountValue = offer.discountValue;
         couponMessage = `✅ تم تطبيق خصم بقيمة ${offer.discountValue} د.ك.`;

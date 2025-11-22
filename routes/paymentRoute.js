@@ -4,6 +4,7 @@ const router = express.Router();
 const { protect, allowedTo } = require('../controllers/auth.controller');
 const {
   initiatePayment,
+  checkPaymentStatus,
   paymentSuccess,
   paymentError,
   paymentWebhook,
@@ -13,8 +14,12 @@ const {
 const { initiatePaymentValidator } = require('../validators/payment');
 
 router.get('/methods', protect, allowedTo("user"), getPaymentMethods);
+
 // 💳 بدء الدفع (User فقط)
 router.post('/initiate', protect, allowedTo("user"), initiatePaymentValidator, initiatePayment);
+
+// ✅ التحقق من حالة الدفع (للـ Flutter app)
+router.get('/check-status/:invoiceId', protect, allowedTo("user"), checkPaymentStatus);
 
 // ✅ Success & Error Callbacks
 router.get('/success', paymentSuccess);

@@ -140,16 +140,26 @@ exports.validateCoupon = asyncHandler(async (req, res, next) => {
     }
 
     if (coupon.discountValue) {
-      totalDiscount = totalPrice * (coupon.discountValue / 100);
+      // ✅ دعم النسب العشرية: لو القيمة أقل من 1، اضربها في 100
+      const discountPercentage = coupon.discountValue < 1 
+        ? coupon.discountValue * 100 
+        : coupon.discountValue;
+      
+      totalDiscount = totalPrice * (discountPercentage / 100);
     }
   }
 
+  // ✅ حساب النسبة المئوية الصحيحة للعرض
+  const displayPercentage = coupon.discountValue < 1 
+    ? coupon.discountValue * 100 
+    : coupon.discountValue;
+
   res.status(200).json({
     status: "success",
-    message: `✅ الكوبون صالح! خصم ${coupon.discountValue}%`,
+    message: `✅ الكوبون صالح! خصم ${displayPercentage}%`,
     data: {
       couponCode: coupon.couponCode,
-      discountPercentage: coupon.discountValue,
+      discountPercentage: displayPercentage,
       discountAmount: totalDiscount,
       totalBeforeDiscount: totalPrice,
       totalAfterDiscount: totalPrice - totalDiscount

@@ -61,8 +61,8 @@ exports.initiatePayment = asyncHandler(async (req, res, next) => {
     {
       orderId: order._id.toString(),
       total: order.total,
-      shippingCost: order.shippingCost || 0,      // ✅ الشحن
-      discountValue: order.discountValue || 0,    // ✅ الخصم
+      shippingCost: order.shippingCost || 0,
+      discountValue: order.discountValue || 0,
       user: {
         firstName: order.user.firstName,
         lastName: order.user.lastName,
@@ -95,6 +95,95 @@ exports.initiatePayment = asyncHandler(async (req, res, next) => {
   });
 });
 
+// ✅ التحقق من حالة الدفع باستخدام InvoiceId (للـ Flutter app)
+exports.checkPaymentStatus = asyncHandler(async (req, res, next) => {
+  const { invoiceId } = req.params;
+
+  if (!invoiceId) {
+    return next(new ApiError('Invoice ID is required', 400));
+  }
+
+  // البحث عن الأوردر باستخدام invoiceId
+  const order = await Order.findOne({ 
+    'paymentDetails.invoiceId': invoiceId 
+  });
+
+  if (!order) {
+    return next(new ApiError('Order not found', 404));
+  }
+
+  // التحقق من ملكية الأوردر
+  if (order.user.toString() !== req.user._id.toString()) {
+    return next(new ApiError('Unauthorized', 403));
+  }
+
+  // ✅ استدعاء MyFatoorah للحصول على آخر حالة
+  const paymentStatus = await myFatoorah.getPaymentStatus(invoiceId, 'InvoiceId');
+
+  if (!paymentStatus.success) {
+    return res.status(200).json({
+      status: 'pending',
+      message: 'Payment is still pending',
+      orderStatus: order.status,
+      paymentStatus: order.paymentDetails?.status || 'pending'
+    });
+  }
+
+  // ✅ لو الدفع نجح ولسه مش محدّث
+  if (paymentStatus.status === 'Paid' && order.paymentDetails.status !== 'paid') {
+    // تحديث الأوردر
+    order.status = 'confirmed';
+    order.paymentDetails.status = 'paid';
+    order.paymentDetails.transactionId = paymentStatus.transactionId;
+    order.paymentDetails.paymentMethod = paymentStatus.paymentMethod;
+    order.paymentDetails.paidAt = new Date();
+    
+    // خصم الكميات
+    for (const item of order.cartItems) {
+      await Product.findByIdAndUpdate(item.product, {
+        $inc: { quantity: -item.quantity, sold: item.quantity },
+      });
+    }
+
+    await order.save();
+
+    await sendNotification(
+      order.user,
+      'تم الدفع بنجاح ✅',
+      `تم تأكيد دفع طلبك رقم ${order._id}`,
+      'order'
+    );
+  }
+
+  // ✅ لو الدفع فشل
+  if (paymentStatus.status === 'Failed' && order.paymentDetails.status !== 'failed') {
+    order.paymentDetails.status = 'failed';
+    order.paymentDetails.failedAt = new Date();
+    await order.save();
+
+    await sendNotification(
+      order.user,
+      'فشل الدفع ❌',
+      `فشلت عملية دفع طلبك رقم ${order._id}`,
+      'order'
+    );
+  }
+
+  // إرجاع الحالة الحالية
+  res.status(200).json({
+    status: 'success',
+    data: {
+      orderId: order._id,
+      orderStatus: order.status,
+      paymentStatus: order.paymentDetails.status,
+      transactionId: order.paymentDetails.transactionId,
+      total: order.total,
+      isPaid: order.paymentDetails.status === 'paid',
+      isFailed: order.paymentDetails.status === 'failed'
+    }
+  });
+});
+
 // ✅ Callback - Success (محدّث)
 exports.paymentSuccess = asyncHandler(async (req, res, next) => {
   const { paymentId } = req.query;
@@ -106,7 +195,7 @@ exports.paymentSuccess = asyncHandler(async (req, res, next) => {
     });
   }
 
-  const paymentStatus = await myFatoorah.getPaymentStatus(paymentId);
+  const paymentStatus = await myFatoorah.getPaymentStatus(paymentId, 'PaymentId');
 
   if (!paymentStatus.success || paymentStatus.status !== 'Paid') {
     return res.status(400).json({
@@ -169,7 +258,7 @@ exports.paymentError = asyncHandler(async (req, res, next) => {
   const { paymentId } = req.query;
 
   if (paymentId) {
-    const paymentStatus = await myFatoorah.getPaymentStatus(paymentId);
+    const paymentStatus = await myFatoorah.getPaymentStatus(paymentId, 'PaymentId');
     
     if (paymentStatus.success && paymentStatus.reference) {
       const order = await Order.findById(paymentStatus.reference);

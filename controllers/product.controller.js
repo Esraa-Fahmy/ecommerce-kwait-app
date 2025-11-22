@@ -7,6 +7,36 @@ const sharp = require('sharp');
 const { uploadMixOfImages } = require('../middlewares/uploadImageMiddleWare');
 const User = require("../models/user.model");
 const cartModel = require("../models/cartModel");
+const Offer = require("../models/offer.model");
+
+// 🏷 دالة للتحقق من العروض النشطة على المنتج
+const getActiveOfferForProduct = async (product) => {
+  const now = new Date();
+  
+  const activeOffer = await Offer.findOne({
+    isActive: true,
+    startDate: { $lte: now },
+    endDate: { $gte: now },
+    $or: [
+      { targetType: "product", targetIds: product._id },
+      { targetType: "subcategory", targetIds: product.subCategory },
+      { targetType: "subSubcategory", targetIds: product.subSubCategory },
+      { targetType: "category", targetIds: product.category },
+    ],
+  }).sort({ priority: -1 });
+
+  if (activeOffer) {
+    return {
+      hasOffer: true,
+      offerType: activeOffer.offerType
+    };
+  }
+  
+  return {
+    hasOffer: false,
+    offerType: null
+  };
+};
 
 
 exports.uploadProductImages = uploadMixOfImages([
@@ -107,7 +137,7 @@ exports.getAllProducts = asyncHandler(async (req, res) => {
     }
   }
 
-  const formattedProducts = products.map(p => {
+  const formattedProducts = await Promise.all(products.map(async p => {
     const prod = p.toObject(); // safe copy
     const pid = prod._id.toString();
     prod.isWishlist = wishlistIds.includes(pid);
@@ -115,8 +145,14 @@ exports.getAllProducts = asyncHandler(async (req, res) => {
     prod.cartQuantity = cartMap[pid] || 0;
     prod.wishlistCount = wishlistCount;
     prod.cartCount = cartCount;
+    
+    // ✅ معلومات العروض
+    const offerInfo = await getActiveOfferForProduct(p);
+    prod.hasOffer = offerInfo.hasOffer;
+    prod.offerType = offerInfo.offerType;
+    
     return prod;
-  });
+  }));
 
   res.status(200).json({
     status: "success",
@@ -167,6 +203,11 @@ exports.getSingleProduct = asyncHandler(async (req, res, next) => {
       product.isCart = qty > 0;
     }
   }
+
+  // ✅ معلومات العروض
+  const offerInfo = await getActiveOfferForProduct(productDoc);
+  product.hasOffer = offerInfo.hasOffer;
+  product.offerType = offerInfo.offerType;
 
   res.status(200).json({ status: "success", data: product });
 });
