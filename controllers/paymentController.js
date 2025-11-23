@@ -138,11 +138,16 @@ exports.checkPaymentStatus = asyncHandler(async (req, res, next) => {
     order.paymentDetails.paymentMethod = paymentStatus.paymentMethod;
     order.paymentDetails.paidAt = new Date();
     
-    // خصم الكميات
+    // خصم الكميات (فقط لو الدفع لم يتم من قبل)
     for (const item of order.cartItems) {
       await Product.findByIdAndUpdate(item.product, {
         $inc: { quantity: -item.quantity, sold: item.quantity },
       });
+    }
+
+    // حذف الـ Cart
+    if (order.cart) {
+      await Cart.findByIdAndDelete(order.cart);
     }
 
     await order.save();
@@ -213,26 +218,28 @@ exports.paymentSuccess = asyncHandler(async (req, res, next) => {
     });
   }
 
-  // ✅ تحديث Order + خصم الكميات + حذف Cart
-  order.status = 'confirmed';
-  order.paymentDetails.status = 'paid';
-  order.paymentDetails.transactionId = paymentStatus.transactionId;
-  order.paymentDetails.paymentMethod = paymentStatus.paymentMethod;
-  order.paymentDetails.paidAt = new Date();
-  
-  // خصم الكميات
-  for (const item of order.cartItems) {
-    await Product.findByIdAndUpdate(item.product, {
-      $inc: { quantity: -item.quantity, sold: item.quantity },
-    });
-  }
+  // ✅ تحديث Order + خصم الكميات + حذف Cart (فقط لو لم يتم الدفع من قبل)
+  if (order.paymentDetails.status !== 'paid') {
+    order.status = 'confirmed';
+    order.paymentDetails.status = 'paid';
+    order.paymentDetails.transactionId = paymentStatus.transactionId;
+    order.paymentDetails.paymentMethod = paymentStatus.paymentMethod;
+    order.paymentDetails.paidAt = new Date();
+    
+    // خصم الكميات
+    for (const item of order.cartItems) {
+      await Product.findByIdAndUpdate(item.product, {
+        $inc: { quantity: -item.quantity, sold: item.quantity },
+      });
+    }
 
-  // حذف الـ Cart
-  if (order.cart) {
-    await Cart.findByIdAndDelete(order.cart);
-  }
+    // حذف الـ Cart
+    if (order.cart) {
+      await Cart.findByIdAndDelete(order.cart);
+    }
 
-  await order.save();
+    await order.save();
+  }
 
   await sendNotification(
     order.user,
@@ -311,8 +318,8 @@ exports.paymentWebhook = asyncHandler(async (req, res, next) => {
     return res.status(404).json({ message: 'Order not found' });
   }
 
-  if (Data.InvoiceStatus === 'Paid') {
-    // ✅ تحديث Order
+  if (Data.InvoiceStatus === 'Paid' && order.paymentDetails.status !== 'paid') {
+    // ✅ تحديث Order (فقط لو لم يتم الدفع من قبل)
     order.status = 'confirmed';
     order.paymentDetails.status = 'paid';
     order.paymentDetails.transactionId = Data.InvoiceTransactions?.[0]?.TransactionId;
