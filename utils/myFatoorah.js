@@ -72,6 +72,13 @@ exports.executePayment = async (paymentMethodId, { orderId, total, shippingCost,
       });
     }
 
+    // ✅ تنسيق رقم الموبايل (MyFatoorah تقبل 11 رقم فقط بدون كود الدولة)
+    let formattedPhone = user.phone.replace(/\D/g, ''); // إزالة أي حروف أو رموز
+    if (formattedPhone.startsWith('965')) {
+      formattedPhone = formattedPhone.substring(3); // إزالة كود الدولة 965
+    }
+    formattedPhone = formattedPhone.substring(0, 11); // أخذ أول 11 رقم فقط
+
     const payload = {
       PaymentMethodId: paymentMethodId,
       InvoiceValue: total,
@@ -79,7 +86,7 @@ exports.executePayment = async (paymentMethodId, { orderId, total, shippingCost,
       ErrorUrl: ERROR_URL,
       CustomerName: `${user.firstName} ${user.lastName}`,
       CustomerEmail: user.email,
-      CustomerMobile: user.phone,
+      CustomerMobile: formattedPhone,
       CustomerReference: orderId,
       DisplayCurrencyIso: 'KWD',
       MobileCountryCode: '+965',
