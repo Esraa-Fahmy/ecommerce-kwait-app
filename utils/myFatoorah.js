@@ -54,7 +54,7 @@ exports.executePayment = async (paymentMethodId, { orderId, total, shippingCost,
       UnitPrice: item.price,
     }));
 
-    // إضافة الشحن كعنصر منفصل
+    // إضافة الشحن كعنصل منفصل
     if (shippingCost > 0) {
       invoiceItems.push({
         ItemName: 'Shipping Cost',
@@ -87,6 +87,8 @@ exports.executePayment = async (paymentMethodId, { orderId, total, shippingCost,
       InvoiceItems: invoiceItems,
     };
 
+    console.log('🔍 Sending to MyFatoorah:', JSON.stringify(payload, null, 2));
+
     const response = await axios.post(
       `${MYFATOORAH_BASE_URL}/v2/ExecutePayment`,
       payload,
@@ -105,16 +107,20 @@ exports.executePayment = async (paymentMethodId, { orderId, total, shippingCost,
         invoiceId: response.data.Data.InvoiceId,
       };
     } else {
+      console.error('❌ MyFatoorah rejected:', JSON.stringify(response.data, null, 2));
       return {
         success: false,
         message: response.data.Message || 'Failed to execute payment',
       };
     }
   } catch (error) {
-    console.error('❌ MyFatoorah Execute Payment Error:', error.response?.data || error.message);
+    console.error('❌ MyFatoorah API Error:', JSON.stringify(error.response?.data, null, 2));
+    const errorMsg = error.response?.data?.ValidationErrors?.[0]?.Error 
+      || error.response?.data?.Message 
+      || 'Payment execution failed';
     return {
       success: false,
-      message: error.response?.data?.Message || 'Payment execution failed',
+      message: errorMsg,
     };
   }
 };
