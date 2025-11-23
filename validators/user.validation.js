@@ -51,7 +51,15 @@ exports.createUserValidator = [
     .withMessage('Invalid phone number; only Egy and SA numbers accepted'),
 
   check('profileImg').optional(),
-  check('role').optional(),
+  
+  check('role')
+    .optional()
+    .custom((val) => {
+      if (val && val !== 'admin') {
+        throw new Error('You can only create admin users. Regular users must sign up through /api/v1/auth/signup');
+      }
+      return true;
+    }),
 
   validatorMiddleware,
 ];

@@ -76,8 +76,16 @@ exports.getUsers = asyncHandler(async (req, res) => {
 });
 
 
-// Create a new user
-exports.createUser = asyncHandler(async (req, res) => {
+// Create a new user (Admin only - can only create other admins)
+exports.createUser = asyncHandler(async (req, res, next) => {
+  // ✅ التحقق من أن الـ role هو admin فقط
+  if (req.body.role && req.body.role !== 'admin') {
+    return next(new ApiError('You can only create admin users through this endpoint. Regular users must sign up through /api/v1/auth/signup', 400));
+  }
+
+  // ✅ إجبار الـ role يكون admin
+  req.body.role = 'admin';
+
   const user = await User.create(req.body);
   user.password = undefined;
   res.status(201).json({ data: user });
