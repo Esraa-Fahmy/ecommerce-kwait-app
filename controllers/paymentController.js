@@ -300,16 +300,9 @@ exports.paymentWebhook = asyncHandler(async (req, res, next) => {
   const signature = req.headers['myfatoorah-signature'];
   const payload = req.body;
 
-  // ✅ السماح بتخطي التحقق في بيئة التطوير فقط (للاختبار من Postman)
-  const skipSignatureCheck = process.env.SKIP_WEBHOOK_SIGNATURE_CHECK === 'true';
-  
-  if (!skipSignatureCheck && !myFatoorah.verifyWebhookSignature(payload, signature)) {
+  if (!myFatoorah.verifyWebhookSignature(payload, signature)) {
     console.error('⚠️ Invalid webhook signature');
     return res.status(400).json({ message: 'Invalid signature' });
-  }
-
-  if (skipSignatureCheck) {
-    console.warn('⚠️ WARNING: Webhook signature check is DISABLED for testing');
   }
 
   const { Data } = payload;
