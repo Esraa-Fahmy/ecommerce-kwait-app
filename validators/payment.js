@@ -14,3 +14,20 @@ exports.initiatePaymentValidator = [
 
   validatorMiddleware,
 ];
+
+exports.refundPaymentValidator = [
+  check("orderId")
+    .notEmpty()
+    .withMessage("Order ID is required")
+    .isMongoId()
+    .withMessage("Invalid Order ID format"),
+
+  check("reason")
+    .optional()
+    .isString()
+    .withMessage("Reason must be a string")
+    .isLength({ min: 3, max: 500 })
+    .withMessage("Reason must be between 3 and 500 characters"),
+
+  validatorMiddleware,
+];

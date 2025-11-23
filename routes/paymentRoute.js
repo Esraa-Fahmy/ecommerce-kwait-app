@@ -11,7 +11,7 @@ const {
   refundPayment,
   getPaymentMethods,
 } = require('../controllers/paymentController');
-const { initiatePaymentValidator } = require('../validators/payment');
+const { initiatePaymentValidator, refundPaymentValidator } = require('../validators/payment');
 
 router.get('/methods', protect, allowedTo("user"), getPaymentMethods);
 
@@ -29,6 +29,6 @@ router.get('/error', paymentError);
 router.post('/webhook', paymentWebhook);
 
 // 🔄 Refund (Admin فقط)
-router.post('/refund', protect, allowedTo('admin'), refundPayment);
+router.post('/refund', protect, allowedTo('admin'), refundPaymentValidator, refundPayment);
 
 module.exports = router;
