@@ -215,7 +215,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
 exports.getUserOrders = asyncHandler(async (req, res) => {
   const orders = await Order.find({ user: req.user._id })
     .populate("user", "firstName lastName email phone")
-    .populate("cartItems.product", "code title price imageCover")
+    .populate("cartItems.product")
     .sort({ createdAt: -1 });
   res.status(200).json({ results: orders.length, data: orders });
 });

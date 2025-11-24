@@ -7,6 +7,47 @@ const Product = require("../models/product.model");
 const myFatoorah = require("../utils/myFatoorah");
 const { sendNotification } = require("../utils/sendNotifications");
 
+// 🛠️ Helper: Send HTML Redirect
+const sendHtmlRedirect = (res, deepLink, type = 'success', message = '') => {
+  const isSuccess = type === 'success';
+  const color = isSuccess ? '#4CAF50' : '#f44336';
+  const title = isSuccess ? '✅ Payment Successful' : '❌ Payment Failed';
+  const text = isSuccess 
+    ? 'Your payment has been processed successfully. Redirecting you back to the app...' 
+    : (message || 'Payment failed. Please try again.');
+  
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>${isSuccess ? 'Payment Successful' : 'Payment Failed'}</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; padding: 40px 20px; background-color: #f9f9f9; }
+            .container { max-width: 400px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            h1 { color: ${color}; margin-bottom: 10px; }
+            p { color: #666; margin-bottom: 30px; }
+            .btn { display: inline-block; padding: 12px 24px; background-color: ${color}; color: white; text-decoration: none; border-radius: 25px; font-weight: bold; transition: background 0.3s; }
+            .btn:hover { opacity: 0.9; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>${title}</h1>
+            <p>${text}</p>
+            <a href="${deepLink}" class="btn">Return to App</a>
+        </div>
+        <script>
+            setTimeout(function() {
+                window.location.href = "${deepLink}";
+            }, 500);
+        </script>
+    </body>
+    </html>
+  `;
+  return res.send(html);
+};
+
 // 💳 Get All Payment Methods From MyFatoorah
 exports.getPaymentMethods = asyncHandler(async (req, res, next) => {
   const result = await myFatoorah.initiatePayment({
@@ -194,19 +235,19 @@ exports.paymentSuccess = asyncHandler(async (req, res, next) => {
   const { paymentId } = req.query;
 
   if (!paymentId) {
-    return res.redirect(`3roudapp://payment-error?message=Payment ID is required`);
+    return sendHtmlRedirect(res, `3roudapp://payment-error?message=Payment ID is required`, 'error', 'Payment ID is required');
   }
 
   const paymentStatus = await myFatoorah.getPaymentStatus(paymentId, 'PaymentId');
 
   if (!paymentStatus.success || paymentStatus.status !== 'Paid') {
-    return res.redirect(`3roudapp://payment-error?message=Payment not completed`);
+    return sendHtmlRedirect(res, `3roudapp://payment-error?message=Payment not completed`, 'error', 'Payment not completed');
   }
 
   const order = await Order.findById(paymentStatus.reference).populate('cart');
 
   if (!order) {
-    return res.redirect(`3roudapp://payment-error?message=Order not found`);
+    return sendHtmlRedirect(res, `3roudapp://payment-error?message=Order not found`, 'error', 'Order not found');
   }
 
   // ✅ تحديث Order + خصم الكميات + حذف Cart (فقط لو لم يتم الدفع من قبل)
@@ -240,7 +281,7 @@ exports.paymentSuccess = asyncHandler(async (req, res, next) => {
   );
 
   // ✅ Redirect to App Deep Link
-  return res.redirect(`3roudapp://payment-success?paymentId=${paymentId}&orderId=${order._id}`);
+  return sendHtmlRedirect(res, `3roudapp://payment-success?paymentId=${paymentId}&orderId=${order._id}`, 'success');
 });
 
 // ❌ Error Callback
@@ -272,7 +313,7 @@ exports.paymentError = asyncHandler(async (req, res, next) => {
   }
 
   // ✅ Redirect to App Deep Link
-  return res.redirect(`3roudapp://payment-error?paymentId=${paymentId || ''}&message=Payment failed`);
+  return sendHtmlRedirect(res, `3roudapp://payment-error?paymentId=${paymentId || ''}&message=Payment failed`, 'error', 'Payment failed');
 });
 
 // 🔔 Webhook (محدّث)
