@@ -194,28 +194,19 @@ exports.paymentSuccess = asyncHandler(async (req, res, next) => {
   const { paymentId } = req.query;
 
   if (!paymentId) {
-    return res.status(400).json({
-      status: 'error',
-      message: 'Payment ID is required'
-    });
+    return res.redirect(`3roudapp://payment-error?message=Payment ID is required`);
   }
 
   const paymentStatus = await myFatoorah.getPaymentStatus(paymentId, 'PaymentId');
 
   if (!paymentStatus.success || paymentStatus.status !== 'Paid') {
-    return res.status(400).json({
-      status: 'error',
-      message: 'Payment not completed'
-    });
+    return res.redirect(`3roudapp://payment-error?message=Payment not completed`);
   }
 
   const order = await Order.findById(paymentStatus.reference).populate('cart');
 
   if (!order) {
-    return res.status(404).json({
-      status: 'error',
-      message: 'Order not found'
-    });
+    return res.redirect(`3roudapp://payment-error?message=Order not found`);
   }
 
   // ✅ تحديث Order + خصم الكميات + حذف Cart (فقط لو لم يتم الدفع من قبل)
@@ -248,16 +239,8 @@ exports.paymentSuccess = asyncHandler(async (req, res, next) => {
     'order'
   );
 
-  res.status(200).json({
-    status: 'success',
-    message: 'Payment completed successfully',
-    data: {
-      orderId: order._id,
-      total: order.total,
-      paymentMethod: paymentStatus.paymentMethod,
-      transactionId: paymentStatus.transactionId,
-    }
-  });
+  // ✅ Redirect to App Deep Link
+  return res.redirect(`3roudapp://payment-success?paymentId=${paymentId}&orderId=${order._id}`);
 });
 
 // ❌ Error Callback
@@ -288,11 +271,8 @@ exports.paymentError = asyncHandler(async (req, res, next) => {
     }
   }
 
-  res.status(400).json({
-    status: 'error',
-    message: 'Payment failed',
-    data: null
-  });
+  // ✅ Redirect to App Deep Link
+  return res.redirect(`3roudapp://payment-error?paymentId=${paymentId || ''}&message=Payment failed`);
 });
 
 // 🔔 Webhook (محدّث)

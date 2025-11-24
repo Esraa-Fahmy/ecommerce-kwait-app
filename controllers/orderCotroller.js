@@ -215,6 +215,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
 exports.getUserOrders = asyncHandler(async (req, res) => {
   const orders = await Order.find({ user: req.user._id })
     .populate("user", "firstName lastName email phone")
+    .populate("cartItems.product", "code title price imageCover")
     .sort({ createdAt: -1 });
   res.status(200).json({ results: orders.length, data: orders });
 });
@@ -225,6 +226,7 @@ exports.getUserOrders = asyncHandler(async (req, res) => {
 exports.getAllOrders = asyncHandler(async (req, res) => {
   const orders = await Order.find()
     .populate("user", "firstName lastName email phone")
+    .populate("cartItems.product", "code title price imageCover")
     .sort({ createdAt: -1 });
   res.status(200).json({ results: orders.length, data: orders });
 });
@@ -234,7 +236,8 @@ exports.getAllOrders = asyncHandler(async (req, res) => {
 // =============================
 exports.getOrder = asyncHandler(async (req, res, next) => {
   const order = await Order.findById(req.params.id)
-    .populate("user", "firstName lastName email phone");
+    .populate("user", "firstName lastName email phone")
+    .populate("cartItems.product", "code title price imageCover");
 
   if (!order) return next(new ApiError("Order not found", 404));
   res.status(200).json({ data: order });
