@@ -312,7 +312,7 @@ exports.paymentSuccess = asyncHandler(async (req, res, next) => {
 
 // ❌ Error Callback (App Links)
 exports.paymentError = asyncHandler(async (req, res, next) => {
-  const { paymentId, message } = req.query;
+  const { paymentId, message, orderId } = req.query;
   let errorMessage = message || 'Payment failed';
 
   if (paymentId) {
@@ -322,6 +322,8 @@ exports.paymentError = asyncHandler(async (req, res, next) => {
       const order = await Order.findById(paymentStatus.reference);
       
       if (order) {
+        // ✅ تحديث حالة الطلب والدفع
+        order.status = 'failed';
         order.paymentDetails = {
           ...order.paymentDetails,
           status: 'failed',
@@ -336,6 +338,23 @@ exports.paymentError = asyncHandler(async (req, res, next) => {
           'order'
         );
       }
+    }
+  } else if (orderId) {
+    // ✅ حالة إلغاء الدفع بدون paymentId (المستخدم رجع من صفحة الدفع)
+    const order = await Order.findById(orderId);
+    
+    if (order && order.paymentDetails?.status === 'pending') {
+      order.status = 'failed';
+      order.paymentDetails.status = 'failed';
+      order.paymentDetails.failedAt = new Date();
+      await order.save();
+
+      await sendNotification(
+        order.user,
+        'تم إلغاء الدفع ❌',
+        `تم إلغاء عملية دفع طلبك رقم ${order._id}.`,
+        'order'
+      );
     }
   }
 
@@ -360,7 +379,7 @@ exports.paymentError = asyncHandler(async (req, res, next) => {
             <div class="icon">❌</div>
             <h1>فشل الدفع</h1>
             <p>${errorMessage}</p>
-            <p style="font-size: 14px; color: #999;">سيتم فتح التطبيق تلقائياً...</p>
+            <p style="font-size: 14px; color: #999;">يرجى المحاولة مرة أخرى</p>
         </div>
     </body>
     </html>

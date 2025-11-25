@@ -62,7 +62,7 @@ const orderSchema = new mongoose.Schema({
     enum: [
       'pending','confirmed','in_preparation','out_for_delivery',
       'delivered','cancelled_by_user','rejected','returned',
-      'refunded','delivery_failed'
+      'refunded','delivery_failed','failed'
     ],
     default: 'pending'
   }
