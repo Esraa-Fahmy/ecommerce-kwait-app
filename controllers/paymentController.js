@@ -230,24 +230,24 @@ exports.checkPaymentStatus = asyncHandler(async (req, res, next) => {
   });
 });
 
-// ✅ Callback - Success (محدّث)
+// ✅ Callback - Success (App Links)
 exports.paymentSuccess = asyncHandler(async (req, res, next) => {
   const { paymentId } = req.query;
 
   if (!paymentId) {
-    return sendHtmlRedirect(res, `3roudapp://payment-error?message=Payment ID is required`, 'error', 'Payment ID is required');
+    return res.redirect(`/payment-error?message=${encodeURIComponent('Payment ID is required')}`);
   }
 
   const paymentStatus = await myFatoorah.getPaymentStatus(paymentId, 'PaymentId');
 
   if (!paymentStatus.success || paymentStatus.status !== 'Paid') {
-    return sendHtmlRedirect(res, `3roudapp://payment-error?message=Payment not completed`, 'error', 'Payment not completed');
+    return res.redirect(`/payment-error?message=${encodeURIComponent('Payment not completed')}`);
   }
 
   const order = await Order.findById(paymentStatus.reference).populate('cart');
 
   if (!order) {
-    return sendHtmlRedirect(res, `3roudapp://payment-error?message=Order not found`, 'error', 'Order not found');
+    return res.redirect(`/payment-error?message=${encodeURIComponent('Order not found')}`);
   }
 
   // ✅ تحديث Order + خصم الكميات + حذف Cart (فقط لو لم يتم الدفع من قبل)
@@ -280,13 +280,40 @@ exports.paymentSuccess = asyncHandler(async (req, res, next) => {
     'order'
   );
 
-  // ✅ Redirect to App Deep Link
-  return sendHtmlRedirect(res, `3roudapp://payment-success?paymentId=${paymentId}&orderId=${order._id}`, 'success');
+  // ✅ Render simple page for App Links (Android will intercept this URL)
+  const html = `
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Payment Successful</title>
+        <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+            .container { background: white; padding: 40px; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 400px; }
+            h1 { color: #4CAF50; margin-bottom: 20px; }
+            p { color: #666; margin-bottom: 30px; }
+            .icon { font-size: 80px; margin-bottom: 20px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="icon">✅</div>
+            <h1>تم الدفع بنجاح!</h1>
+            <p>تمت معالجة الدفع بنجاح. سيتم فتح التطبيق تلقائياً...</p>
+            <p style="font-size: 12px; color: #999;">Order ID: ${order._id}</p>
+        </div>
+    </body>
+    </html>
+  `;
+  
+  return res.send(html);
 });
 
-// ❌ Error Callback
+// ❌ Error Callback (App Links)
 exports.paymentError = asyncHandler(async (req, res, next) => {
-  const { paymentId } = req.query;
+  const { paymentId, message } = req.query;
+  let errorMessage = message || 'Payment failed';
 
   if (paymentId) {
     const paymentStatus = await myFatoorah.getPaymentStatus(paymentId, 'PaymentId');
@@ -312,8 +339,34 @@ exports.paymentError = asyncHandler(async (req, res, next) => {
     }
   }
 
-  // ✅ Redirect to App Deep Link
-  return sendHtmlRedirect(res, `3roudapp://payment-error?paymentId=${paymentId || ''}&message=Payment failed`, 'error', 'Payment failed');
+  // ✅ Render simple page for App Links (Android will intercept this URL)
+  const html = `
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Payment Failed</title>
+        <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+            .container { background: white; padding: 40px; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 400px; }
+            h1 { color: #f44336; margin-bottom: 20px; }
+            p { color: #666; margin-bottom: 30px; }
+            .icon { font-size: 80px; margin-bottom: 20px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="icon">❌</div>
+            <h1>فشل الدفع</h1>
+            <p>${errorMessage}</p>
+            <p style="font-size: 14px; color: #999;">يرجى المحاولة مرة أخرى</p>
+        </div>
+    </body>
+    </html>
+  `;
+  
+  return res.send(html);
 });
 
 // 🔔 Webhook (محدّث)
