@@ -23,6 +23,11 @@ app.use(express.static(path.join(__dirname, "uploads")));
 // Serve payment redirect pages from public directory
 app.use(express.static(path.join(__dirname, "public")));
 
+// ✅ Serve assetlinks.json for Android App Links verification
+app.get('/.well-known/assetlinks.json', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', '.well-known', 'assetlinks.json'));
+});
+
 // ✅ App Links Routes (must be before /api/v1/payment)
 const { paymentSuccess, paymentError } = require("./controllers/paymentController");
 app.get('/payment-success', paymentSuccess);
