@@ -360,7 +360,7 @@ exports.paymentError = asyncHandler(async (req, res, next) => {
             <div class="icon">❌</div>
             <h1>فشل الدفع</h1>
             <p>${errorMessage}</p>
-            <p style="font-size: 14px; color: #999;">يرجى المحاولة مرة أخرى</p>
+            <p style="font-size: 14px; color: #999;">سيتم فتح التطبيق تلقائياً...</p>
         </div>
     </body>
     </html>

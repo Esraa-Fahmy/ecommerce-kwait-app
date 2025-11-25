@@ -25,7 +25,17 @@ app.use(express.static(path.join(__dirname, "public")));
 
 // ✅ Serve assetlinks.json for Android App Links verification
 app.get('/.well-known/assetlinks.json', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', '.well-known', 'assetlinks.json'));
+  const fs = require('fs');
+  const filePath = path.join(__dirname, 'public', '.well-known', 'assetlinks.json');
+  
+  // Check if file exists
+  if (fs.existsSync(filePath)) {
+    res.setHeader('Content-Type', 'application/json');
+    const content = fs.readFileSync(filePath, 'utf8');
+    res.send(content);
+  } else {
+    res.status(404).json({ error: 'assetlinks.json not found', path: filePath });
+  }
 });
 
 // ✅ App Links Routes (must be before /api/v1/payment)
