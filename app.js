@@ -23,6 +23,11 @@ app.use(express.static(path.join(__dirname, "uploads")));
 // Serve payment redirect pages from public directory
 app.use(express.static(path.join(__dirname, "public")));
 
+// ✅ App Links Routes (must be before /api/v1/payment)
+const { paymentSuccess, paymentError } = require("./controllers/paymentController");
+app.get('/payment-success', paymentSuccess);
+app.get('/payment-failed', paymentError);
+
 // Mount Routes
 app.use("/api/v1/categories", require("./routes/category.route"));
 app.use("/api/v1/subCategories", require("./routes/subcategory.route"));
