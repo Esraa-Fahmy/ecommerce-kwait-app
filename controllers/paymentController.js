@@ -323,7 +323,7 @@ exports.paymentError = asyncHandler(async (req, res, next) => {
       
       if (order) {
         // ✅ تحديث حالة الطلب والدفع
-        order.status = 'failed';
+        order.status = 'cancelled';
         order.paymentDetails = {
           ...order.paymentDetails,
           status: 'failed',
@@ -344,7 +344,7 @@ exports.paymentError = asyncHandler(async (req, res, next) => {
     const order = await Order.findById(orderId);
     
     if (order && order.paymentDetails?.status === 'pending') {
-      order.status = 'failed';
+      order.status = 'cancelled';
       order.paymentDetails.status = 'failed';
       order.paymentDetails.failedAt = new Date();
       await order.save();
