@@ -49,9 +49,9 @@ exports.initiatePayment = async ({ total, user, orderId, cartItems }) => {
 exports.executePayment = async (paymentMethodId, { orderId, total, shippingCost, discountValue, user, cartItems }) => {
   try {
     const invoiceItems = cartItems.map(item => ({
-      ItemName: item.name || item.product?.name || 'Product',
+      ItemName: item.title || item.name || item.product?.title || item.product?.name || 'Product',
       Quantity: item.quantity,
-      UnitPrice: item.price,
+      UnitPrice: item.priceAfterOffer || item.price,
     }));
 
     // إضافة الشحن كعنصل منفصل
