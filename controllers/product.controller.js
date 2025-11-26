@@ -28,13 +28,22 @@ const getActiveOfferForProduct = async (product) => {
   if (activeOffer) {
     return {
       hasOffer: true,
-      offerType: activeOffer.offerType
+      appliedOffer: {
+        _id: activeOffer._id,
+        title: activeOffer.title,
+        offerType: activeOffer.offerType,
+        discountValue: activeOffer.discountValue,
+        startDate: activeOffer.startDate,
+        endDate: activeOffer.endDate,
+        buyQuantity: activeOffer.buyQuantity,
+        getQuantity: activeOffer.getQuantity,
+      }
     };
   }
   
   return {
     hasOffer: false,
-    offerType: null
+    appliedOffer: null
   };
 };
 
@@ -149,7 +158,7 @@ exports.getAllProducts = asyncHandler(async (req, res) => {
     // ✅ معلومات العروض
     const offerInfo = await getActiveOfferForProduct(p);
     prod.hasOffer = offerInfo.hasOffer;
-    prod.offerType = offerInfo.offerType;
+    prod.appliedOffer = offerInfo.appliedOffer;
     
     return prod;
   }));
@@ -207,7 +216,7 @@ exports.getSingleProduct = asyncHandler(async (req, res, next) => {
   // ✅ معلومات العروض
   const offerInfo = await getActiveOfferForProduct(productDoc);
   product.hasOffer = offerInfo.hasOffer;
-  product.offerType = offerInfo.offerType;
+  product.appliedOffer = offerInfo.appliedOffer;
 
   res.status(200).json({ status: "success", data: product });
 });
