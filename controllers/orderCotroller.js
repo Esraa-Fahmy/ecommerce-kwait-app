@@ -140,9 +140,6 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
   const address = await Address.findOne({ _id: addressId, user: req.user._id });
   if (!address) return next(new ApiError("Address not found", 404));
 
-  const shipping = await Shipping.findOne({ city: address.city });
-  const shippingCost = shipping ? shipping.cost : 0;
-
   const totals = await calculateOrderTotals(cart, coupon, req.user, address.city);
 
   const order = await Order.create({
@@ -153,7 +150,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
     paymentMethod,
     subtotal: totals.totalPrice,
     discountValue: totals.discountValue,
-    shippingCost: totals.shippingPrice || shippingCost,
+    shippingCost: totals.shippingPrice,
     total: totals.totalOrderPrice,
     coupon,
     paymentDetails: {
@@ -163,6 +160,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
   });
 
   await order.populate("user", "firstName lastName email phone");
+  await order.populate("cartItems.appliedOffer");
 
   // ----------------------------
   // ✅ تفريغ الكارت فوراً بعد إنشاء الأوردر
