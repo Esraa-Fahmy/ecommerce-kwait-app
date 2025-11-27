@@ -40,10 +40,6 @@ const calculateOrderTotals = async (cart, coupon, user, city) => {
     } else {
       // ✅ تطبيق الخصم
       if (offer.offerType === "coupon" || offer.offerType === "percentage") {
-        // ✅ دعم النسب العشرية: لو القيمة أقل من 1، اضربها في 100 عشان تبقى نسبة مئوية
-        // مثال: 0.1 → 10%، 0.25 → 25%
-        // لو القيمة 1 أو أكبر، استخدمها مباشرة كنسبة مئوية
-        // مثال: 10 → 10%، 25 → 25%
         const discountPercentage = offer.discountValue < 1 
           ? offer.discountValue * 100 
           : offer.discountValue;
@@ -78,7 +74,6 @@ const calculateOrderTotals = async (cart, coupon, user, city) => {
     });
 
     if (freeShippingOffer) {
-      // التحقق من الحد الأدنى لقيمة السلة
       if (!freeShippingOffer.minCartValue || totalAfterDiscount >= freeShippingOffer.minCartValue) {
         hasFreeShipping = true;
       }
@@ -162,9 +157,6 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
   await order.populate("user", "firstName lastName email phone");
   await order.populate("cartItems.appliedOffer");
 
-  // ----------------------------
-  // ✅ تفريغ الكارت فوراً بعد إنشاء الأوردر
-  // ----------------------------
   await Cart.findByIdAndDelete(cart._id);
 
   // لو COD خصم الكميات
@@ -183,9 +175,8 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
     );
   }
 
-  let orderResponse = order.toObject(); // تحويل الـ mongoose document إلى object
+  let orderResponse = order.toObject();
 
-  // تحويل product من object كامل إلى id فقط
   orderResponse.cartItems = orderResponse.cartItems.map(item => ({
     ...item,
     product: item.product._id || item.product
@@ -193,8 +184,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
 
   // ✅ إزالة paymentDetails في حالة COD
   if (paymentMethod === "cod") {
-    const { paymentDetails, ...orderWithoutPaymentDetails } = orderResponse;
-    orderResponse = orderWithoutPaymentDetails;
+    delete orderResponse.paymentDetails;
   }
 
   res.status(201).json({
@@ -203,9 +193,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
     data: orderResponse,
     requiresPayment: paymentMethod === "visa",
   });
-
 });
-
 
 // =============================
 // 📋 GET USER ORDERS
@@ -213,8 +201,18 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
 exports.getUserOrders = asyncHandler(async (req, res) => {
   const orders = await Order.find({ user: req.user._id })
     .populate("user", "firstName lastName email phone")
+    .populate("cartItems.appliedOffer")
     .sort({ createdAt: -1 });
-  res.status(200).json({ results: orders.length, data: orders });
+  
+  const formattedOrders = orders.map(order => {
+    const orderObj = order.toObject();
+    if (orderObj.paymentMethod === 'cod') {
+      delete orderObj.paymentDetails;
+    }
+    return orderObj;
+  });
+  
+  res.status(200).json({ results: formattedOrders.length, data: formattedOrders });
 });
 
 // =============================
@@ -224,8 +222,18 @@ exports.getAllOrders = asyncHandler(async (req, res) => {
   const orders = await Order.find()
     .populate("user", "firstName lastName email phone")
     .populate("cartItems.product", "code title price imageCover")
+    .populate("cartItems.appliedOffer")
     .sort({ createdAt: -1 });
-  res.status(200).json({ results: orders.length, data: orders });
+  
+  const formattedOrders = orders.map(order => {
+    const orderObj = order.toObject();
+    if (orderObj.paymentMethod === 'cod') {
+      delete orderObj.paymentDetails;
+    }
+    return orderObj;
+  });
+  
+  res.status(200).json({ results: formattedOrders.length, data: formattedOrders });
 });
 
 // =============================
@@ -234,10 +242,17 @@ exports.getAllOrders = asyncHandler(async (req, res) => {
 exports.getOrder = asyncHandler(async (req, res, next) => {
   const order = await Order.findById(req.params.id)
     .populate("user", "firstName lastName email phone")
-    .populate("cartItems.product", "code title price imageCover");
+    .populate("cartItems.product", "code title price imageCover")
+    .populate("cartItems.appliedOffer");
 
   if (!order) return next(new ApiError("Order not found", 404));
-  res.status(200).json({ data: order });
+  
+  let orderResponse = order.toObject();
+  if (orderResponse.paymentMethod === 'cod') {
+    delete orderResponse.paymentDetails;
+  }
+  
+  res.status(200).json({ data: orderResponse });
 });
 
 // =============================
