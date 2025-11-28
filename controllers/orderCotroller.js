@@ -10,7 +10,7 @@ const Shipping = require("../models/shippingModel");
 const { sendNotification } = require("../utils/sendNotifications");
 
 // 🧮 Helper: حساب الإجماليات
-const calculateOrderTotals = async (cart, coupon, user, city) => {
+const calculateOrderTotals = async (cart, coupon, user, city, shippingTypeId = 'standard') => {
   let discountValue = 0;
   let totalPrice = 0;
   let couponMessage = null;
@@ -81,9 +81,21 @@ const calculateOrderTotals = async (cart, coupon, user, city) => {
   }
 
   // حساب تكلفة الشحن إذا لم يكن مجاني
+  let selectedShippingType = null;
   if (!hasFreeShipping && city) {
     const shipping = await Shipping.findOne({ city });
-    shippingPrice = shipping ? shipping.cost : 0;
+    if (shipping && shipping.shippingTypes && shipping.shippingTypes.length > 0) {
+      // Find selected shipping type
+      selectedShippingType = shipping.shippingTypes.find(t => t.type === shippingTypeId && t.isActive);
+      if (!selectedShippingType) {
+        // Fallback to standard if selected type not found
+        selectedShippingType = shipping.shippingTypes.find(t => t.type === 'standard' && t.isActive);
+      }
+      shippingPrice = selectedShippingType ? selectedShippingType.cost : 0;
+    } else if (shipping && shipping.cost) {
+      // Backward compatibility with old format
+      shippingPrice = shipping.cost;
+    }
   }
 
   const totalOrderPrice = totalAfterDiscount + shippingPrice;
@@ -95,6 +107,7 @@ const calculateOrderTotals = async (cart, coupon, user, city) => {
     totalOrderPrice,
     couponMessage,
     hasFreeShipping,
+    selectedShippingType,
   };
 };
 
@@ -123,7 +136,7 @@ exports.previewOrder = asyncHandler(async (req, res, next) => {
 // ✅ CREATE ORDER (Updated for Visa)
 // =============================
 exports.createOrder = asyncHandler(async (req, res, next) => {
-  const { cartId, addressId, paymentMethod = "cod", coupon } = req.body;
+  const { cartId, addressId, paymentMethod = "cod", coupon, shippingTypeId = 'standard' } = req.body;
 
   if (!["cod", "visa"].includes(paymentMethod)) {
     return next(new ApiError("Invalid payment method", 400));
@@ -135,7 +148,39 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
   const address = await Address.findOne({ _id: addressId, user: req.user._id });
   if (!address) return next(new ApiError("Address not found", 404));
 
-  const totals = await calculateOrderTotals(cart, coupon, req.user, address.city);
+  // ✅ Validate same-day shipping cutoff time
+  if (shippingTypeId === 'same_day') {
+    const now = new Date();
+    const cutoffHour = 12; // 12 PM
+    if (now.getHours() >= cutoffHour) {
+      return next(new ApiError('الشحن في نفس اليوم غير متاح بعد الساعة 12 ظهراً', 400));
+    }
+  }
+
+  const totals = await calculateOrderTotals(cart, coupon, req.user, address.city, shippingTypeId);
+
+  // ✅ Calculate estimated delivery date
+  let estimatedDelivery = new Date();
+  let shippingTypeInfo = {
+    type: shippingTypeId,
+    name: 'شحن عادي',
+    deliveryTime: '2-3 أيام',
+    selectedAt: new Date()
+  };
+
+  if (totals.selectedShippingType) {
+    shippingTypeInfo = {
+      type: totals.selectedShippingType.type,
+      name: totals.selectedShippingType.name,
+      deliveryTime: totals.selectedShippingType.deliveryTime,
+      selectedAt: new Date()
+    };
+    // Calculate estimated delivery based on deliveryHours
+    estimatedDelivery.setHours(estimatedDelivery.getHours() + totals.selectedShippingType.deliveryHours);
+  } else {
+    // Default: 48 hours for standard shipping
+    estimatedDelivery.setHours(estimatedDelivery.getHours() + 48);
+  }
 
   const order = await Order.create({
     user: req.user._id,
@@ -146,6 +191,8 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
     subtotal: totals.totalPrice,
     discountValue: totals.discountValue,
     shippingCost: totals.shippingPrice,
+    shippingType: shippingTypeInfo,
+    estimatedDelivery,
     total: totals.totalOrderPrice,
     coupon,
     paymentDetails: {

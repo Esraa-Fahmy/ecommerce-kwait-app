@@ -1,10 +1,32 @@
 const Review = require('../models/reviewModel');
+const Order = require('../models/orderModel');
 const asyncHandler = require('express-async-handler');
 const ApiError = require('../utils/apiError');
 
 // ✅ إضافة تقييم لمنتج
 exports.addProductRating = asyncHandler(async (req, res, next) => {
   const { rating, comment, productId } = req.body;
+
+  // ✅ التحقق من أن المستخدم اشترى المنتج واستلمه
+  const deliveredOrder = await Order.findOne({
+    user: req.user._id,
+    status: 'delivered',
+    'cartItems.product': productId
+  });
+
+  if (!deliveredOrder) {
+    return next(new ApiError('يجب عليك شراء المنتج واستلامه أولاً لتتمكن من تقييمه', 403));
+  }
+
+  // ✅ التحقق من عدم وجود تقييم سابق لنفس المنتج من نفس المستخدم
+  const existingReview = await Review.findOne({
+    user: req.user._id,
+    product: productId
+  });
+
+  if (existingReview) {
+    return next(new ApiError('لقد قمت بتقييم هذا المنتج من قبل. يمكنك تعديل تقييمك السابق.', 400));
+  }
 
   const newRating = await Review.create({
     rating,
@@ -16,7 +38,7 @@ exports.addProductRating = asyncHandler(async (req, res, next) => {
   const populatedRating = await Review.findById(newRating._id)
     .populate({
       path: 'user',
-      select: 'firstName lastName profileImg', // الحاجات اللي عايزاها
+      select: 'firstName lastName profileImg',
     });
 
   res.status(201).json({

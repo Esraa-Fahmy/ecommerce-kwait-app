@@ -37,14 +37,14 @@ const orderSchema = new mongoose.Schema({
   
   // ✨ إضافة تفاصيل الدفع
   paymentDetails: {
-    invoiceId: String, // Invoice ID من MyFatoorah
-    transactionId: String, // Transaction ID بعد الدفع
+    invoiceId: String,
+    transactionId: String,
     status: { 
       type: String, 
       enum: ['pending', 'paid', 'failed', 'refunded'],
       default: 'pending'
     },
-    paymentMethod: String, // KNET, Visa, MasterCard, etc.
+    paymentMethod: String,
     initiatedAt: Date,
     paidAt: Date,
     failedAt: Date,
@@ -53,6 +53,24 @@ const orderSchema = new mongoose.Schema({
   },
 
   shippingCost: { type: Number, default: 0 },
+  
+  // ✅ معلومات نوع الشحن المختار
+  shippingType: {
+    type: {
+      type: String,
+      enum: ['standard', 'express', 'same_day'],
+      default: 'standard'
+    },
+    name: String,
+    deliveryTime: String,
+    selectedAt: {
+      type: Date,
+      default: Date.now
+    }
+  },
+  
+  estimatedDelivery: Date,
+  
   coupon: { type: String },
   discountValue: { type: Number, default: 0 },
   subtotal: { type: Number, required: true },
@@ -69,4 +87,3 @@ const orderSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 module.exports = mongoose.model('Order', orderSchema);
-
