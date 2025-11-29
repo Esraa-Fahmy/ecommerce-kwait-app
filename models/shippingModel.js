@@ -1,4 +1,4 @@
-// models/shipping.model.js
+// models/shippingModel.js
 const mongoose = require('mongoose');
 
 const shippingTypeSchema = new mongoose.Schema({
@@ -47,29 +47,14 @@ const shippingSchema = new mongoose.Schema({
   },
   shippingTypes: {
     type: [shippingTypeSchema],
-    default: []
-  },
-  // ✅ Backward compatibility - keep cost field for migration
-  cost: {
-    type: Number,
-    min: [0, 'Shipping cost cannot be negative']
-  },
-}, { timestamps: true });
-
-// ✅ Pre-save hook: If only cost is provided, create default standard shipping type
-shippingSchema.pre('save', function(next) {
-  if (this.cost && (!this.shippingTypes || this.shippingTypes.length === 0)) {
-    this.shippingTypes = [{
-      type: 'standard',
-      name: 'شحن عادي',
-      cost: this.cost,
-      deliveryTime: '2-3 أيام',
-      deliveryHours: 48,
-      cutoffTime: null,
-      isActive: true
-    }];
+    required: [true, 'At least one shipping type is required'],
+    validate: {
+      validator: function(v) {
+        return v && v.length > 0;
+      },
+      message: 'At least one shipping type must be provided'
+    }
   }
-  next();
-});
+}, { timestamps: true });
 
 module.exports = mongoose.model('Shipping', shippingSchema);
