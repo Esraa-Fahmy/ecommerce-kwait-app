@@ -414,6 +414,29 @@ exports.getAppStats = asyncHandler(async (req, res, next) => {
   });
 });
 
+// @desc    Update User FCM Token
+// @route   PUT /api/v1/user/fcm-token
+// @access  Private/Protect
+exports.updateFcmToken = asyncHandler(async (req, res, next) => {
+  const { fcmToken } = req.body;
+
+  if (!fcmToken) {
+    return next(new ApiError("FCM Token is required", 400));
+  }
+
+  const user = await User.findByIdAndUpdate(
+    req.user._id,
+    { fcmToken },
+    { new: true }
+  );
+
+  res.status(200).json({
+    status: "success",
+    message: "FCM Token updated successfully",
+    data: user
+  });
+});
+
 
 
 
