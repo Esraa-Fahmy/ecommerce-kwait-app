@@ -68,6 +68,97 @@ exports.deleteCity = asyncHandler(async (req, res, next) => {
   res.status(200).json({ status: "success", message: "City removed" });
 });
 
+// =============================
+// 📦 SHIPPING TYPE MANAGEMENT
+// =============================
+
+// @desc Add shipping type to city
+exports.addShippingType = asyncHandler(async (req, res, next) => {
+  const { cityId } = req.params;
+  const { type, name, cost, deliveryTime, deliveryHours, cutoffTime, isActive } = req.body;
+
+  const city = await Shipping.findById(cityId);
+  if (!city) return next(new ApiError("City not found", 404));
+
+  // Check if type already exists
+  const existingType = city.shippingTypes.find(t => t.type === type);
+  if (existingType) {
+    return next(new ApiError(`Shipping type '${type}' already exists for this city`, 400));
+  }
+
+  // Add new shipping type
+  city.shippingTypes.push({
+    type,
+    name,
+    cost,
+    deliveryTime,
+    deliveryHours,
+    cutoffTime: cutoffTime || null,
+    isActive: isActive !== undefined ? isActive : true
+  });
+
+  await city.save();
+  res.status(201).json({ 
+    status: "success", 
+    message: "Shipping type added successfully",
+    data: city 
+  });
+});
+
+// @desc Update specific shipping type
+exports.updateShippingType = asyncHandler(async (req, res, next) => {
+  const { cityId, typeId } = req.params;
+  const updates = req.body;
+
+  const city = await Shipping.findById(cityId);
+  if (!city) return next(new ApiError("City not found", 404));
+
+  // Find the shipping type by _id
+  const shippingType = city.shippingTypes.id(typeId);
+  if (!shippingType) {
+    return next(new ApiError("Shipping type not found", 404));
+  }
+
+  // Update only provided fields
+  if (updates.name !== undefined) shippingType.name = updates.name;
+  if (updates.cost !== undefined) shippingType.cost = updates.cost;
+  if (updates.deliveryTime !== undefined) shippingType.deliveryTime = updates.deliveryTime;
+  if (updates.deliveryHours !== undefined) shippingType.deliveryHours = updates.deliveryHours;
+  if (updates.cutoffTime !== undefined) shippingType.cutoffTime = updates.cutoffTime;
+  if (updates.isActive !== undefined) shippingType.isActive = updates.isActive;
+
+  await city.save();
+  res.status(200).json({ 
+    status: "success", 
+    message: "Shipping type updated successfully",
+    data: city 
+  });
+});
+
+// @desc Delete specific shipping type
+exports.deleteShippingType = asyncHandler(async (req, res, next) => {
+  const { cityId, typeId } = req.params;
+
+  const city = await Shipping.findById(cityId);
+  if (!city) return next(new ApiError("City not found", 404));
+
+  // Find and remove the shipping type
+  const shippingType = city.shippingTypes.id(typeId);
+  if (!shippingType) {
+    return next(new ApiError("Shipping type not found", 404));
+  }
+
+  shippingType.remove();
+  await city.save();
+
+  res.status(200).json({ 
+    status: "success", 
+    message: "Shipping type deleted successfully",
+    data: city 
+  });
+});
+
+
 // @desc Get available shipping types for a city (for users)
 exports.getAvailableShippingTypes = asyncHandler(async (req, res, next) => {
   const { city } = req.query;
