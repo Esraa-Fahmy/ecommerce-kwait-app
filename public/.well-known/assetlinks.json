@@ -3,7 +3,7 @@
     "relation": ["delegate_permission/common.handle_all_urls"],
     "target": {
       "namespace": "android_app",
-      "package_name": "com.example.aoroud",
+      "package_name": "com.orood.app",
       "sha256_cert_fingerprints": [
         "A5:3B:F5:A4:B3:7B:71:54:69:C3:1F:2E:0F:88:13:F6:DC:8A:14:C0:22:D8:92:CB:E1:13:27:82:F4:EC:38:60"
       ]
