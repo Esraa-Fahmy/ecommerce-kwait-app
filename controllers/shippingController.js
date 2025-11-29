@@ -109,6 +109,7 @@ exports.getAvailableShippingTypes = asyncHandler(async (req, res, next) => {
         }
 
         return {
+          _id: type._id,
           id: type.type,
           type: type.type,
           name: type.name,
