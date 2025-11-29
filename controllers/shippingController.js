@@ -92,17 +92,33 @@ exports.getAvailableShippingTypes = asyncHandler(async (req, res, next) => {
     // New format with multiple types
     availableTypes = shipping.shippingTypes
       .filter(type => type.isActive)
-      .map(type => ({
-        id: type.type,
-        type: type.type,
-        name: type.name,
-        cost: type.cost,
-        deliveryTime: type.deliveryTime,
-        isAvailable: type.type === 'same_day' ? isSameDayAvailable : true,
-        reason: type.type === 'same_day' && !isSameDayAvailable 
-          ? 'غير متاح بعد الساعة 12 ظهراً' 
-          : null
-      }));
+      .map(type => {
+        // Check availability based on cutoff time
+        let isAvailable = true;
+        let reason = null;
+
+        if (type.cutoffTime) {
+          const [cutoffHour, cutoffMinute] = type.cutoffTime.split(':').map(Number);
+          const currentMinutes = now.getHours() * 60 + now.getMinutes();
+          const cutoffMinutes = cutoffHour * 60 + (cutoffMinute || 0);
+
+          if (currentMinutes >= cutoffMinutes) {
+            isAvailable = false;
+            reason = `غير متاح بعد الساعة ${type.cutoffTime}`;
+          }
+        }
+
+        return {
+          id: type.type,
+          type: type.type,
+          name: type.name,
+          cost: type.cost,
+          deliveryTime: type.deliveryTime,
+          cutoffTime: type.cutoffTime || null,
+          isAvailable,
+          reason
+        };
+      });
   } else if (shipping.cost) {
     // Backward compatibility - old format
     availableTypes = [{

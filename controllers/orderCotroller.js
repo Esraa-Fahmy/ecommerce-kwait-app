@@ -1,4 +1,4 @@
-// controllers/orderController.js - Updated for Visa Payment
+// controllers/orderController.js - Updated for Visa Payment with ShippingType ObjectId
 const asyncHandler = require("express-async-handler");
 const ApiError = require("../utils/apiError");
 const Order = require("../models/orderModel");
@@ -7,10 +7,11 @@ const Offer = require("../models/offer.model");
 const Product = require("../models/product.model");
 const Address = require("../models/addressModel");
 const Shipping = require("../models/shippingModel");
+const ShippingType = require("../models/shippingType.model");
 const { sendNotification } = require("../utils/sendNotifications");
 
 // 🧮 Helper: حساب الإجماليات
-const calculateOrderTotals = async (cart, coupon, user, city, shippingTypeId = 'standard') => {
+const calculateOrderTotals = async (cart, coupon, user, city, shippingTypeId = null) => {
   let discountValue = 0;
   let totalPrice = 0;
   let couponMessage = null;
@@ -82,19 +83,16 @@ const calculateOrderTotals = async (cart, coupon, user, city, shippingTypeId = '
 
   // حساب تكلفة الشحن إذا لم يكن مجاني
   let selectedShippingType = null;
-  if (!hasFreeShipping && city) {
-    const shipping = await Shipping.findOne({ city });
-    if (shipping && shipping.shippingTypes && shipping.shippingTypes.length > 0) {
-      // Find selected shipping type
-      selectedShippingType = shipping.shippingTypes.find(t => t.type === shippingTypeId && t.isActive);
-      if (!selectedShippingType) {
-        // Fallback to standard if selected type not found
-        selectedShippingType = shipping.shippingTypes.find(t => t.type === 'standard' && t.isActive);
-      }
-      shippingPrice = selectedShippingType ? selectedShippingType.cost : 0;
-    } else if (shipping && shipping.cost) {
-      // Backward compatibility with old format
-      shippingPrice = shipping.cost;
+  if (!hasFreeShipping && city && shippingTypeId) {
+    // ✅ Use ShippingType model with ObjectId
+    selectedShippingType = await ShippingType.findOne({
+      _id: shippingTypeId,
+      city: city,
+      isActive: true
+    });
+    
+    if (selectedShippingType) {
+      shippingPrice = selectedShippingType.cost;
     }
   }
 
@@ -133,10 +131,10 @@ exports.previewOrder = asyncHandler(async (req, res, next) => {
 });
 
 // =============================
-// ✅ CREATE ORDER (Updated for Visa)
+// ✅ CREATE ORDER (Updated for Visa with ShippingType ObjectId)
 // =============================
 exports.createOrder = asyncHandler(async (req, res, next) => {
-  const { cartId, addressId, paymentMethod = "cod", coupon, shippingTypeId = 'standard' } = req.body;
+  const { cartId, addressId, paymentMethod = "cod", coupon, shippingTypeId } = req.body;
 
   if (!["cod", "visa"].includes(paymentMethod)) {
     return next(new ApiError("Invalid payment method", 400));
@@ -148,12 +146,31 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
   const address = await Address.findOne({ _id: addressId, user: req.user._id });
   if (!address) return next(new ApiError("Address not found", 404));
 
-  // ✅ Validate same-day shipping cutoff time
-  if (shippingTypeId === 'same_day') {
+  // ✅ Validate shippingTypeId is provided
+  if (!shippingTypeId) {
+    return next(new ApiError("يجب اختيار نوع الشحن", 400));
+  }
+
+  // ✅ Validate shipping type exists and is active
+  const shippingType = await ShippingType.findOne({
+    _id: shippingTypeId,
+    city: address.city,
+    isActive: true
+  });
+
+  if (!shippingType) {
+    return next(new ApiError("نوع الشحن غير متاح لهذه المدينة", 400));
+  }
+
+  // ✅ Validate cutoff time if applicable
+  if (shippingType.cutoffTime) {
     const now = new Date();
-    const cutoffHour = 12; // 12 PM
-    if (now.getHours() >= cutoffHour) {
-      return next(new ApiError('الشحن في نفس اليوم غير متاح بعد الساعة 12 ظهراً', 400));
+    const [cutoffHour, cutoffMinute] = shippingType.cutoffTime.split(':').map(Number);
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const cutoffMinutes = cutoffHour * 60 + (cutoffMinute || 0);
+
+    if (currentMinutes >= cutoffMinutes) {
+      return next(new ApiError(`${shippingType.name} غير متاح بعد الساعة ${shippingType.cutoffTime}`, 400));
     }
   }
 
@@ -162,25 +179,16 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
   // ✅ Calculate estimated delivery date
   let estimatedDelivery = new Date();
   let shippingTypeInfo = {
-    type: shippingTypeId,
-    name: 'شحن عادي',
-    deliveryTime: '2-3 أيام',
+    _id: shippingType._id,
+    type: shippingType.type,
+    name: shippingType.name,
+    cost: shippingType.cost,
+    deliveryTime: shippingType.deliveryTime,
     selectedAt: new Date()
   };
 
-  if (totals.selectedShippingType) {
-    shippingTypeInfo = {
-      type: totals.selectedShippingType.type,
-      name: totals.selectedShippingType.name,
-      deliveryTime: totals.selectedShippingType.deliveryTime,
-      selectedAt: new Date()
-    };
-    // Calculate estimated delivery based on deliveryHours
-    estimatedDelivery.setHours(estimatedDelivery.getHours() + totals.selectedShippingType.deliveryHours);
-  } else {
-    // Default: 48 hours for standard shipping
-    estimatedDelivery.setHours(estimatedDelivery.getHours() + 48);
-  }
+  // Calculate estimated delivery based on deliveryHours
+  estimatedDelivery.setHours(estimatedDelivery.getHours() + shippingType.deliveryHours);
 
   const order = await Order.create({
     user: req.user._id,

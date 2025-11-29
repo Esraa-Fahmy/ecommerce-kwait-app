@@ -54,14 +54,20 @@ const orderSchema = new mongoose.Schema({
 
   shippingCost: { type: Number, default: 0 },
   
-  // ✅ معلومات نوع الشحن المختار
+  // ✅ معلومات نوع الشحن المختار (with ObjectId reference)
   shippingType: {
+    _id: {
+      type: mongoose.Schema.ObjectId,
+      ref: 'ShippingType',
+      default: null
+    },
     type: {
       type: String,
-      enum: ['standard', 'express', 'same_day'],
+      enum: ['standard', 'express', 'same_day', 'custom'],
       default: 'standard'
     },
     name: String,
+    cost: Number,
     deliveryTime: String,
     selectedAt: {
       type: Date,
