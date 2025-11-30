@@ -15,14 +15,13 @@ const calculateOrderTotals = async (cart, coupon, user, city, shippingTypeId = '
   let totalPrice = 0;
   let couponMessage = null;
 
-  // ✅ استخدام priceAfterOffer من السلة (يحتوي على كل العروض: percentage, fixed, buyXgetY)
+  // ✅ استخدام priceAfterOffer من السلة
   for (const item of cart.cartItems) {
-    // استخدام priceAfterOffer إذا كان موجود، وإلا استخدام السعر العادي
     const itemPrice = item.priceAfterOffer || item.price || 0;
     totalPrice += itemPrice * item.quantity;
   }
 
-  // ✅ تطبيق كوبون الخصم (إن وجد)
+  // ✅ تطبيق كوبون الخصم
   if (coupon) {
     const offer = await Offer.findOne({ couponCode: coupon });
     const now = new Date();
@@ -38,7 +37,6 @@ const calculateOrderTotals = async (cart, coupon, user, city, shippingTypeId = '
     } else if (offer.offerType !== "coupon" && offer.offerType !== "percentage" && offer.offerType !== "fixed") {
       couponMessage = "⚠️ هذا الكود غير صالح للسلة.";
     } else {
-      // ✅ تطبيق الخصم
       if (offer.offerType === "coupon" || offer.offerType === "percentage") {
         const discountPercentage = offer.discountValue < 1 
           ? offer.discountValue * 100 
@@ -55,11 +53,10 @@ const calculateOrderTotals = async (cart, coupon, user, city, shippingTypeId = '
 
   const totalAfterDiscount = Math.max(totalPrice - discountValue, 0);
   
-  // ✅ حساب تكلفة الشحن (مع التحقق من الشحن المجاني)
   let shippingPrice = 0;
   let hasFreeShipping = cart.hasFreeShipping || false;
 
-  // التحقق من عروض الشحن المجاني على مستوى الأوردر
+  // التحقق من عروض الشحن المجاني
   if (!hasFreeShipping && city) {
     const now = new Date();
     const freeShippingOffer = await Offer.findOne({
@@ -80,20 +77,17 @@ const calculateOrderTotals = async (cart, coupon, user, city, shippingTypeId = '
     }
   }
 
-  // حساب تكلفة الشحن إذا لم يكن مجاني
+  // حساب تكلفة الشحن
   let selectedShippingType = null;
   if (!hasFreeShipping && city) {
     const shipping = await Shipping.findOne({ city });
     if (shipping && shipping.shippingTypes && shipping.shippingTypes.length > 0) {
-      // Find selected shipping type
       selectedShippingType = shipping.shippingTypes.find(t => t.type === shippingTypeId && t.isActive);
       if (!selectedShippingType) {
-        // Fallback to standard if selected type not found
         selectedShippingType = shipping.shippingTypes.find(t => t.type === 'standard' && t.isActive);
       }
       shippingPrice = selectedShippingType ? selectedShippingType.cost : 0;
     } else if (shipping && shipping.cost) {
-      // Backward compatibility with old format
       shippingPrice = shipping.cost;
     }
   }
@@ -133,7 +127,7 @@ exports.previewOrder = asyncHandler(async (req, res, next) => {
 });
 
 // =============================
-// ✅ CREATE ORDER (Updated for Visa)
+// ✅ CREATE ORDER
 // =============================
 exports.createOrder = asyncHandler(async (req, res, next) => {
   const { cartId, addressId, paymentMethod = "cod", coupon, shippingTypeId = 'standard' } = req.body;
@@ -148,10 +142,19 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
   const address = await Address.findOne({ _id: addressId, user: req.user._id });
   if (!address) return next(new ApiError("Address not found", 404));
 
+  // ✅ التحقق من توفر الشحن للمدينة
+  const shipping = await Shipping.findOne({ city: address.city });
+  if (!shipping || !shipping.shippingTypes || shipping.shippingTypes.length === 0) {
+    return next(new ApiError(
+      `عذراً، الشحن غير متوفر حالياً للمدينة "${address.city}". يرجى تحديث عنوانك أو اختيار عنوان آخر.`,
+      400
+    ));
+  }
+
   // ✅ Validate same-day shipping cutoff time
   if (shippingTypeId === 'same_day') {
     const now = new Date();
-    const cutoffHour = 12; // 12 PM
+    const cutoffHour = 12;
     if (now.getHours() >= cutoffHour) {
       return next(new ApiError('الشحن في نفس اليوم غير متاح بعد الساعة 12 ظهراً', 400));
     }
@@ -175,10 +178,8 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
       deliveryTime: totals.selectedShippingType.deliveryTime,
       selectedAt: new Date()
     };
-    // Calculate estimated delivery based on deliveryHours
     estimatedDelivery.setHours(estimatedDelivery.getHours() + totals.selectedShippingType.deliveryHours);
   } else {
-    // Default: 48 hours for standard shipping
     estimatedDelivery.setHours(estimatedDelivery.getHours() + 48);
   }
 
@@ -206,7 +207,6 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
 
   await Cart.findByIdAndDelete(cart._id);
 
-  // لو COD خصم الكميات
   if (paymentMethod === "cod") {
     for (const item of order.cartItems) {
       await Product.findByIdAndUpdate(item.product._id, {
@@ -229,7 +229,6 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
     product: item.product._id || item.product
   }));
 
-  // ✅ إزالة paymentDetails في حالة COD
   if (paymentMethod === "cod") {
     delete orderResponse.paymentDetails;
   }

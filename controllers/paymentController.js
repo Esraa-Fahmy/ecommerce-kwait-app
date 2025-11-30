@@ -322,21 +322,26 @@ exports.paymentError = asyncHandler(async (req, res, next) => {
       const order = await Order.findById(paymentStatus.reference);
       
       if (order) {
-        // ✅ تحديث حالة الطلب والدفع
-        order.status = 'failed';
-        order.paymentDetails = {
-          ...order.paymentDetails,
-          status: 'failed',
-          failedAt: new Date(),
-        };
-        await order.save();
+        // ✅ تحديث حالة الطلب والدفع (فقط لو الدفع فعلاً فشل)
+        if (paymentStatus.status === 'Failed' || paymentStatus.status === 'Cancelled') {
+          order.status = 'failed';
+          order.paymentDetails = {
+            ...order.paymentDetails,
+            status: 'failed',
+            failedAt: new Date(),
+          };
+          await order.save();
 
-        await sendNotification(
-          order.user,
-          'فشل الدفع ❌',
-          `فشلت عملية دفع طلبك رقم ${order._id}. يرجى المحاولة مرة أخرى.`,
-          'order'
-        );
+          await sendNotification(
+            order.user,
+            'فشل الدفع ❌',
+            `فشلت عملية دفع طلبك رقم ${order._id}. يرجى المحاولة مرة أخرى.`,
+            'order'
+          );
+        } else if (paymentStatus.status === 'Paid') {
+          // ✅ لو الدفع نجح بس اترجع على error بالغلط، نوجهه للـ success
+          return res.redirect(`/payment-success?paymentId=${paymentId}`);
+        }
       }
     }
   } else if (orderId) {
