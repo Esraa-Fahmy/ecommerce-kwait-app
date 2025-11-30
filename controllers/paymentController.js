@@ -244,7 +244,9 @@ exports.paymentSuccess = asyncHandler(async (req, res, next) => {
     return res.redirect(`/payment-error?message=${encodeURIComponent('Payment not completed')}`);
   }
 
-  const order = await Order.findById(paymentStatus.reference).populate('cart');
+  const order = await Order.findById(paymentStatus.reference)
+    .populate('cart')
+    .populate('user', 'firstName lastName email phone');
 
   if (!order) {
     return res.redirect(`/payment-error?message=${encodeURIComponent('Order not found')}`);
@@ -271,14 +273,15 @@ exports.paymentSuccess = asyncHandler(async (req, res, next) => {
     }
 
     await order.save();
-  }
 
-  await sendNotification(
-    order.user,
-    'تم الدفع بنجاح ✅',
-    `تم تأكيد دفع طلبك رقم ${order._id} بنجاح. إجمالي المبلغ: ${order.total} د.ك`,
-    'order'
-  );
+    // ✅ إرسال الإشعار (بعد الحفظ)
+    await sendNotification(
+      order.user._id,
+      'تم الدفع بنجاح ✅',
+      `تم تأكيد دفع طلبك رقم ${order._id} بنجاح. إجمالي المبلغ: ${order.total} د.ك`,
+      'order'
+    );
+  }
 
   // ✅ Render simple page for App Links (Android will intercept this URL)
   const html = `
