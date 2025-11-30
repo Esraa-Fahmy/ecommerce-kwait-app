@@ -45,7 +45,7 @@ exports.resizeImage = asyncHandler(async (req, res, next) => {
 // Get all users
 exports.getUsers = asyncHandler(async (req, res) => {
   const page = req.query.page * 1 || 1;
-  const limit = req.query.limit * 1 || 10;
+  const limit = req.query.limit * 1 || 30;
   const skip = (page - 1) * limit;
 
   const searchQuery = req.query.search
