@@ -71,30 +71,6 @@ const calculateOrderTotals = async (cart, coupon, user, city, shippingTypeId = '
     });
 
     if (freeShippingOffer) {
-      if (!freeShippingOffer.minCartValue || totalAfterDiscount >= freeShippingOffer.minCartValue) {
-        hasFreeShipping = true;
-      }
-    }
-  }
-
-  // حساب تكلفة الشحن
-  let selectedShippingType = null;
-  if (!hasFreeShipping && city) {
-    const shipping = await Shipping.findOne({ city });
-    if (shipping && shipping.shippingTypes && shipping.shippingTypes.length > 0) {
-      selectedShippingType = shipping.shippingTypes.find(t => t.type === shippingTypeId && t.isActive);
-      if (!selectedShippingType) {
-        selectedShippingType = shipping.shippingTypes.find(t => t.type === 'standard' && t.isActive);
-      }
-      shippingPrice = selectedShippingType ? selectedShippingType.cost : 0;
-    } else if (shipping && shipping.cost) {
-      shippingPrice = shipping.cost;
-    }
-  }
-
-  const totalOrderPrice = totalAfterDiscount + shippingPrice;
-
-  return {
     totalPrice,
     discountValue,
     shippingPrice,
