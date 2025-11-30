@@ -146,7 +146,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
   const shipping = await Shipping.findOne({ city: address.city });
   if (!shipping || !shipping.shippingTypes || shipping.shippingTypes.length === 0) {
     return next(new ApiError(
-      `عذراً، الشحن غير متوفر حالياً للمدينة "${address.city}". يرجى تحديث عنوانك أو اختيار عنوان آخر.`,
+      `عذراً، الشحن غير متوفر حالياً لمدينة "${address.city}" يرجى تحديث عنوانك.`,
       400
     ));
   }
