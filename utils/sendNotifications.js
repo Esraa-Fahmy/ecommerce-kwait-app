@@ -76,8 +76,9 @@ exports.sendNotification = async (userId, title, message, type = "system") => {
           },
           data: {
             type: type,
-            notificationId: notification._id.toString(),
-            displayId: displayId // ✅ إضافة displayId للـ push notification
+            notificationId: displayId, // ✅ إرسال المعرف المختصر بدلاً من الطويل
+            mongoId: notification._id.toString(), // ✅ الاحتفاظ بالمعرف الأصلي للعمليات الخلفية
+            displayId: displayId
           }
         });
         console.log(`✅ Push notification sent to user ${userId} (${displayId})`);

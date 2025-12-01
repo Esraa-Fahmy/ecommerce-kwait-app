@@ -273,38 +273,8 @@ exports.paymentSuccess = asyncHandler(async (req, res, next) => {
       paymentStatus: order.paymentDetails?.status 
     });
 
-    // ✅ Step 3: إرسال HTML Response فوراً (قبل المعالجة)
-    const html = `
-      <!DOCTYPE html>
-      <html lang="ar" dir="rtl">
-      <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Payment Successful</title>
-          <style>
-              body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-              .container { background: white; padding: 40px; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 400px; }
-              h1 { color: #4CAF50; margin-bottom: 20px; }
-              p { color: #666; margin-bottom: 30px; }
-              .icon { font-size: 80px; margin-bottom: 20px; }
-          </style>
-      </head>
-      <body>
-          <div class="container">
-              <div class="icon">✅</div>
-              <h1>تم الدفع بنجاح!</h1>
-              <p>تمت معالجة الدفع بنجاح. سيتم فتح التطبيق تلقائياً...</p>
-              <p style="font-size: 12px; color: #999;">Order ID: ${order._id}</p>
-          </div>
-      </body>
-      </html>
-    `;
-    
-    console.log('📄 Sending HTML response immediately...');
-    res.send(html);
-
-    // ✅ Step 4: معالجة الطلب في الـ background (بعد إرسال الـ response)
-    // استخدام setImmediate لتنفيذ الكود بعد إرسال الـ response
+    // ✅ Step 3: معالجة الطلب في الـ background
+    // استخدام setImmediate لتنفيذ الكود بشكل غير متزامن
     setImmediate(async () => {
       try {
         if (order.paymentDetails.status !== 'paid') {
@@ -352,6 +322,7 @@ exports.paymentSuccess = asyncHandler(async (req, res, next) => {
 
           // ✅ إرسال الإشعار
           try {
+            const { sendNotification } = require("../utils/sendNotifications");
             console.log('🔔 Sending notification...');
             await sendNotification(
               order.user._id,
@@ -373,7 +344,40 @@ exports.paymentSuccess = asyncHandler(async (req, res, next) => {
       }
     });
 
-    console.log('✅ Payment Success Callback - Response sent, background processing started');
+    // ✅ Step 4: انتظار قصير (2 ثانية) لضمان بدء المعالجة قبل فتح التطبيق
+    console.log('⏳ Waiting 2 seconds before sending response...');
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // ✅ Step 5: إرسال HTML Response
+    const html = `
+      <!DOCTYPE html>
+      <html lang="ar" dir="rtl">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Payment Successful</title>
+          <style>
+              body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+              .container { background: white; padding: 40px; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 400px; }
+              h1 { color: #4CAF50; margin-bottom: 20px; }
+              p { color: #666; margin-bottom: 30px; }
+              .icon { font-size: 80px; margin-bottom: 20px; }
+          </style>
+      </head>
+      <body>
+          <div class="container">
+              <div class="icon">✅</div>
+              <h1>تم الدفع بنجاح!</h1>
+              <p>تمت معالجة الدفع بنجاح. سيتم فتح التطبيق تلقائياً...</p>
+              <p style="font-size: 12px; color: #999;">Order ID: ${order._id}</p>
+          </div>
+      </body>
+      </html>
+    `;
+    
+    console.log('📄 Sending HTML response...');
+    res.send(html);
+
 
   } catch (error) {
     console.error('❌ Payment Success Callback - Unexpected Error:', error);
