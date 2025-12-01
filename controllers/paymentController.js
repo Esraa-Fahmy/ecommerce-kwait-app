@@ -273,74 +273,7 @@ exports.paymentSuccess = asyncHandler(async (req, res, next) => {
       paymentStatus: order.paymentDetails?.status 
     });
 
-    // ✅ Step 3: تحديث Order + خصم الكميات + حذف Cart (فقط لو لم يتم الدفع من قبل)
-    if (order.paymentDetails.status !== 'paid') {
-      console.log('🔄 Processing payment confirmation...');
-
-      // تحديث حالة الطلب
-      order.status = 'confirmed';
-      order.paymentDetails.status = 'paid';
-      order.paymentDetails.transactionId = paymentStatus.transactionId;
-      order.paymentDetails.paymentMethod = paymentStatus.paymentMethod;
-      order.paymentDetails.paidAt = new Date();
-      
-      console.log('✅ Order status updated to confirmed');
-
-      // ✅ Step 4: خصم الكميات من المنتجات
-      console.log('📦 Deducting inventory...');
-      for (const item of order.cartItems) {
-        try {
-          await Product.findByIdAndUpdate(item.product, {
-            $inc: { quantity: -item.quantity, sold: item.quantity },
-          });
-          console.log(`✅ Inventory updated for product ${item.product}`, {
-            quantity: item.quantity
-          });
-        } catch (error) {
-          console.error(`❌ Failed to update inventory for product ${item.product}`, error);
-          // نكمل حتى لو فشل تحديث منتج واحد
-        }
-      }
-
-      // ✅ Step 5: حذف الـ Cart
-      if (order.cart) {
-        try {
-          console.log('🗑️ Deleting cart...', { cartId: order.cart._id || order.cart });
-          await Cart.findByIdAndDelete(order.cart._id || order.cart);
-          console.log('✅ Cart deleted successfully');
-        } catch (error) {
-          console.error('❌ Failed to delete cart', error);
-          // نكمل حتى لو فشل حذف السلة
-        }
-      }
-
-      // ✅ Step 6: حفظ التغييرات
-      console.log('💾 Saving order...');
-      await order.save();
-      console.log('✅ Order saved successfully');
-
-      // ✅ Step 7: إرسال الإشعار
-      try {
-        console.log('🔔 Sending notification...');
-        await sendNotification(
-          order.user._id,
-          'تم الدفع بنجاح ✅',
-          `تم تأكيد دفع طلبك رقم ${order._id} بنجاح. إجمالي المبلغ: ${order.total} د.ك`,
-          'order'
-        );
-        console.log('✅ Notification sent successfully');
-      } catch (error) {
-        console.error('❌ Failed to send notification', error);
-        // نكمل حتى لو فشل إرسال الإشعار
-      }
-
-      console.log('🎉 Payment processing completed successfully!');
-    } else {
-      console.log('ℹ️ Order already marked as paid, skipping processing');
-    }
-
-    // ✅ Step 8: إرسال HTML Response (فقط بعد إتمام كل العمليات)
-    console.log('📄 Sending HTML response...');
+    // ✅ Step 3: إرسال HTML Response فوراً (قبل المعالجة)
     const html = `
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
@@ -367,8 +300,80 @@ exports.paymentSuccess = asyncHandler(async (req, res, next) => {
       </html>
     `;
     
-    console.log('✅ Payment Success Callback - Complete');
-    return res.send(html);
+    console.log('📄 Sending HTML response immediately...');
+    res.send(html);
+
+    // ✅ Step 4: معالجة الطلب في الـ background (بعد إرسال الـ response)
+    // استخدام setImmediate لتنفيذ الكود بعد إرسال الـ response
+    setImmediate(async () => {
+      try {
+        if (order.paymentDetails.status !== 'paid') {
+          console.log('🔄 Processing payment confirmation in background...');
+
+          // تحديث حالة الطلب
+          order.status = 'confirmed';
+          order.paymentDetails.status = 'paid';
+          order.paymentDetails.transactionId = paymentStatus.transactionId;
+          order.paymentDetails.paymentMethod = paymentStatus.paymentMethod;
+          order.paymentDetails.paidAt = new Date();
+          
+          console.log('✅ Order status updated to confirmed');
+
+          // ✅ خصم الكميات من المنتجات
+          console.log('📦 Deducting inventory...');
+          for (const item of order.cartItems) {
+            try {
+              await Product.findByIdAndUpdate(item.product, {
+                $inc: { quantity: -item.quantity, sold: item.quantity },
+              });
+              console.log(`✅ Inventory updated for product ${item.product}`, {
+                quantity: item.quantity
+              });
+            } catch (error) {
+              console.error(`❌ Failed to update inventory for product ${item.product}`, error);
+            }
+          }
+
+          // ✅ حذف الـ Cart
+          if (order.cart) {
+            try {
+              console.log('🗑️ Deleting cart...', { cartId: order.cart._id || order.cart });
+              await Cart.findByIdAndDelete(order.cart._id || order.cart);
+              console.log('✅ Cart deleted successfully');
+            } catch (error) {
+              console.error('❌ Failed to delete cart', error);
+            }
+          }
+
+          // ✅ حفظ التغييرات
+          console.log('💾 Saving order...');
+          await order.save();
+          console.log('✅ Order saved successfully');
+
+          // ✅ إرسال الإشعار
+          try {
+            console.log('🔔 Sending notification...');
+            await sendNotification(
+              order.user._id,
+              'تم الدفع بنجاح ✅',
+              `تم تأكيد دفع طلبك رقم ${order._id} بنجاح. إجمالي المبلغ: ${order.total} د.ك`,
+              'order'
+            );
+            console.log('✅ Notification sent successfully');
+          } catch (error) {
+            console.error('❌ Failed to send notification', error);
+          }
+
+          console.log('🎉 Background payment processing completed successfully!');
+        } else {
+          console.log('ℹ️ Order already marked as paid, skipping background processing');
+        }
+      } catch (bgError) {
+        console.error('❌ Background processing error:', bgError);
+      }
+    });
+
+    console.log('✅ Payment Success Callback - Response sent, background processing started');
 
   } catch (error) {
     console.error('❌ Payment Success Callback - Unexpected Error:', error);
@@ -459,10 +464,14 @@ exports.paymentError = asyncHandler(async (req, res, next) => {
   return res.send(html);
 });
 
-// 🔔 Webhook (محدّث)
+// 🔔 Webhook (Primary Payment Confirmation Mechanism)
 exports.paymentWebhook = asyncHandler(async (req, res, next) => {
+  console.log('🔔 Webhook Received - Start');
+  
   const signature = req.headers['myfatoorah-signature'];
   const payload = req.body;
+
+  console.log('📦 Webhook Payload:', JSON.stringify(payload, null, 2));
 
   // ✅ السماح بتخطي التحقق في بيئة التطوير فقط (للاختبار من Postman)
   const skipSignatureCheck = process.env.SKIP_WEBHOOK_SIGNATURE_CHECK === 'true';
@@ -479,17 +488,35 @@ exports.paymentWebhook = asyncHandler(async (req, res, next) => {
   const { Data } = payload;
   
   if (!Data) {
+    console.error('❌ Webhook - Invalid payload: No Data field');
     return res.status(400).json({ message: 'Invalid payload' });
   }
 
-  const order = await Order.findById(Data.CustomerReference).populate('cart');
+  console.log('📋 Webhook Data:', {
+    InvoiceStatus: Data.InvoiceStatus,
+    CustomerReference: Data.CustomerReference,
+    InvoiceId: Data.InvoiceId,
+    TransactionId: Data.InvoiceTransactions?.[0]?.TransactionId
+  });
+
+  const order = await Order.findById(Data.CustomerReference)
+    .populate('cart')
+    .populate('user', 'firstName lastName email phone fcmToken');
 
   if (!order) {
-    console.error('❌ Order not found for webhook:', Data.CustomerReference);
+    console.error('❌ Webhook - Order not found:', Data.CustomerReference);
     return res.status(404).json({ message: 'Order not found' });
   }
 
+  console.log('✅ Webhook - Order found:', {
+    orderId: order._id,
+    currentStatus: order.status,
+    paymentStatus: order.paymentDetails?.status
+  });
+
   if (Data.InvoiceStatus === 'Paid' && order.paymentDetails.status !== 'paid') {
+    console.log('🔄 Webhook - Processing payment confirmation...');
+
     // ✅ تحديث Order (فقط لو لم يتم الدفع من قبل)
     order.status = 'confirmed';
     order.paymentDetails.status = 'paid';
@@ -497,32 +524,65 @@ exports.paymentWebhook = asyncHandler(async (req, res, next) => {
     order.paymentDetails.paymentMethod = Data.InvoiceTransactions?.[0]?.PaymentGateway;
     order.paymentDetails.paidAt = new Date();
     
+    console.log('✅ Webhook - Order status updated to confirmed');
+
     // ✅ خصم الكميات
+    console.log('📦 Webhook - Deducting inventory...');
     for (const item of order.cartItems) {
-      await Product.findByIdAndUpdate(item.product, {
-        $inc: { quantity: -item.quantity, sold: item.quantity },
-      });
+      try {
+        await Product.findByIdAndUpdate(item.product, {
+          $inc: { quantity: -item.quantity, sold: item.quantity },
+        });
+        console.log(`✅ Webhook - Inventory updated for product ${item.product}`);
+      } catch (error) {
+        console.error(`❌ Webhook - Failed to update inventory for product ${item.product}`, error);
+      }
     }
 
     // ✅ حذف الـ Cart
     if (order.cart) {
-      await Cart.findByIdAndDelete(order.cart);
+      try {
+        console.log('🗑️ Webhook - Deleting cart...', { cartId: order.cart._id || order.cart });
+        await Cart.findByIdAndDelete(order.cart._id || order.cart);
+        console.log('✅ Webhook - Cart deleted successfully');
+      } catch (error) {
+        console.error('❌ Webhook - Failed to delete cart', error);
+      }
     }
 
+    // ✅ حفظ التغييرات
+    console.log('💾 Webhook - Saving order...');
     await order.save();
+    console.log('✅ Webhook - Order saved successfully');
     
-    await sendNotification(
-      order.user,
-      'تأكيد الدفع ✅',
-      `تم تأكيد دفع طلبك رقم ${order._id} عبر ${Data.InvoiceTransactions[0]?.PaymentGateway}`,
-      'order'
-    );
+    // ✅ إرسال الإشعار
+    try {
+      console.log('🔔 Webhook - Sending notification...');
+      await sendNotification(
+        order.user._id,
+        'تأكيد الدفع ✅',
+        `تم تأكيد دفع طلبك رقم ${order._id} عبر ${Data.InvoiceTransactions[0]?.PaymentGateway}`,
+        'order'
+      );
+      console.log('✅ Webhook - Notification sent successfully');
+    } catch (error) {
+      console.error('❌ Webhook - Failed to send notification', error);
+    }
+
+    console.log('🎉 Webhook - Payment processing completed successfully!');
+  } else if (Data.InvoiceStatus === 'Paid' && order.paymentDetails.status === 'paid') {
+    console.log('ℹ️ Webhook - Order already marked as paid, skipping processing');
   } else if (Data.InvoiceStatus === 'Failed') {
+    console.log('⚠️ Webhook - Payment failed, updating order status');
     order.paymentDetails.status = 'failed';
     order.paymentDetails.failedAt = new Date();
     await order.save();
+    console.log('✅ Webhook - Order marked as failed');
+  } else {
+    console.log(`ℹ️ Webhook - Invoice status: ${Data.InvoiceStatus}, no action taken`);
   }
 
+  console.log('✅ Webhook - Complete');
   res.status(200).json({ message: 'Webhook processed successfully' });
 });
 
