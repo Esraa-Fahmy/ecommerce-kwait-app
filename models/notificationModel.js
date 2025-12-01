@@ -20,6 +20,12 @@ const notificationSchema = new mongoose.Schema(
       enum: ["order", "offer", "system", "custom"],
       default: "system",
     },
+    // ✅ معرف عرض فريد وسهل القراءة
+    displayId: {
+      type: String,
+      unique: true,
+      required: true,
+    },
     isRead: {
       type: Boolean,
       default: false,
@@ -28,4 +34,8 @@ const notificationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// ✅ إنشاء index على displayId لضمان السرعة والتفرد
+notificationSchema.index({ displayId: 1 });
+
 module.exports = mongoose.model("Notification", notificationSchema);
+

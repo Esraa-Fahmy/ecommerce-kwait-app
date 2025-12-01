@@ -1,4 +1,5 @@
 const Notification = require("../models/notificationModel");
+const Counter = require("../models/counterModel");
 
 let ioInstance = null;
 let connectedUsers = new Map();
@@ -9,16 +10,45 @@ exports.initNotificationSystem = (io, usersMap) => {
   connectedUsers = usersMap;
 };
 
-// 🔔 دالة إرسال إشعار
+// 🔢 دالة توليد displayId فريد
+const generateDisplayId = async (type) => {
+  // تحديد البادئة حسب نوع الإشعار
+  const prefixes = {
+    order: 'ORD',
+    offer: 'OFF',
+    system: 'SYS',
+    custom: 'NOT'
+  };
+
+  const prefix = prefixes[type] || 'NOT';
+  const counterId = `notification_${type}`;
+
+  // ✅ استخدام findOneAndUpdate مع upsert لضمان الـ atomicity
+  const counter = await Counter.findOneAndUpdate(
+    { _id: counterId },
+    { $inc: { seq: 1 } },
+    { new: true, upsert: true }
+  );
+
+  // تنسيق الرقم ليكون 4 أرقام على الأقل (مثل: 0001, 0042, 1234)
+  const paddedNumber = String(counter.seq).padStart(4, '0');
+  
+  return `#${prefix}-${paddedNumber}`;
+};
+
 // 🔔 دالة إرسال إشعار
 exports.sendNotification = async (userId, title, message, type = "system") => {
   try {
+    // ✅ توليد displayId فريد
+    const displayId = await generateDisplayId(type);
+
     // 1️⃣ خزّن الإشعار في قاعدة البيانات
     const notification = await Notification.create({
       user: userId,
       title,
       message,
       type,
+      displayId, // ✅ إضافة الـ displayId
     });
 
     // 2️⃣ لو المستخدم متصل بسوكيت، ابعتله الإشعار مباشرة
@@ -46,10 +76,11 @@ exports.sendNotification = async (userId, title, message, type = "system") => {
           },
           data: {
             type: type,
-            notificationId: notification._id.toString()
+            notificationId: notification._id.toString(),
+            displayId: displayId // ✅ إضافة displayId للـ push notification
           }
         });
-        console.log(`✅ Push notification sent to user ${userId}`);
+        console.log(`✅ Push notification sent to user ${userId} (${displayId})`);
       } catch (firebaseError) {
         console.error("❌ Firebase send error:", firebaseError.message);
         // Optional: Handle invalid token (remove it if invalid)
@@ -64,3 +95,4 @@ exports.sendNotification = async (userId, title, message, type = "system") => {
     console.error("❌ Notification Error:", error);
   }
 };
+
