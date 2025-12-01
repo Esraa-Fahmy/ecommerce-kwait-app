@@ -48,13 +48,21 @@ exports.getUsers = asyncHandler(async (req, res) => {
   const limit = req.query.limit * 1 || 30;
   const skip = (page - 1) * limit;
 
-  const searchQuery = req.query.search
-  ? {
-      $or: [
-        { firstName: { $regex: req.query.search, $options: "i" } },
-        { lastName: { $regex: req.query.search, $options: "i" } },
-      ]
-    }    : {};
+  // ✅ بناء query للبحث
+  let searchQuery = {};
+
+  // ✅ فلترة حسب الاسم (البحث)
+  if (req.query.search) {
+    searchQuery.$or = [
+      { firstName: { $regex: req.query.search, $options: "i" } },
+      { lastName: { $regex: req.query.search, $options: "i" } },
+    ];
+  }
+
+  // ✅ فلترة حسب الـ role (admin أو user)
+  if (req.query.role) {
+    searchQuery.role = req.query.role;
+  }
 
   // ✅ حساب العدد الإجمالي للمستخدمين بعد الفلترة
   const totalUsers = await User.countDocuments(searchQuery);
