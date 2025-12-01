@@ -234,83 +234,146 @@ exports.checkPaymentStatus = asyncHandler(async (req, res, next) => {
 exports.paymentSuccess = asyncHandler(async (req, res, next) => {
   const { paymentId } = req.query;
 
+  console.log('🔔 Payment Success Callback - Start', { paymentId });
+
   if (!paymentId) {
+    console.error('❌ Payment Success Callback - Missing paymentId');
     return res.redirect(`/payment-error?message=${encodeURIComponent('Payment ID is required')}`);
   }
 
-  const paymentStatus = await myFatoorah.getPaymentStatus(paymentId, 'PaymentId');
+  try {
+    // ✅ Step 1: التحقق من حالة الدفع من MyFatoorah
+    console.log('📡 Fetching payment status from MyFatoorah...');
+    const paymentStatus = await myFatoorah.getPaymentStatus(paymentId, 'PaymentId');
 
-  if (!paymentStatus.success || paymentStatus.status !== 'Paid') {
-    return res.redirect(`/payment-error?message=${encodeURIComponent('Payment not completed')}`);
-  }
+    if (!paymentStatus.success || paymentStatus.status !== 'Paid') {
+      console.error('❌ Payment not completed', { paymentStatus });
+      return res.redirect(`/payment-error?message=${encodeURIComponent('Payment not completed')}`);
+    }
 
-  const order = await Order.findById(paymentStatus.reference)
-    .populate('cart')
-    .populate('user', 'firstName lastName email phone');
+    console.log('✅ Payment verified as Paid', { 
+      transactionId: paymentStatus.transactionId,
+      orderId: paymentStatus.reference 
+    });
 
-  if (!order) {
-    return res.redirect(`/payment-error?message=${encodeURIComponent('Order not found')}`);
-  }
+    // ✅ Step 2: البحث عن الطلب
+    console.log('🔍 Finding order...', { orderId: paymentStatus.reference });
+    const order = await Order.findById(paymentStatus.reference)
+      .populate('cart')
+      .populate('user', 'firstName lastName email phone');
 
-  // ✅ تحديث Order + خصم الكميات + حذف Cart (فقط لو لم يتم الدفع من قبل)
-  if (order.paymentDetails.status !== 'paid') {
-    order.status = 'confirmed';
-    order.paymentDetails.status = 'paid';
-    order.paymentDetails.transactionId = paymentStatus.transactionId;
-    order.paymentDetails.paymentMethod = paymentStatus.paymentMethod;
-    order.paymentDetails.paidAt = new Date();
+    if (!order) {
+      console.error('❌ Order not found', { orderId: paymentStatus.reference });
+      return res.redirect(`/payment-error?message=${encodeURIComponent('Order not found')}`);
+    }
+
+    console.log('✅ Order found', { 
+      orderId: order._id, 
+      currentStatus: order.status,
+      paymentStatus: order.paymentDetails?.status 
+    });
+
+    // ✅ Step 3: تحديث Order + خصم الكميات + حذف Cart (فقط لو لم يتم الدفع من قبل)
+    if (order.paymentDetails.status !== 'paid') {
+      console.log('🔄 Processing payment confirmation...');
+
+      // تحديث حالة الطلب
+      order.status = 'confirmed';
+      order.paymentDetails.status = 'paid';
+      order.paymentDetails.transactionId = paymentStatus.transactionId;
+      order.paymentDetails.paymentMethod = paymentStatus.paymentMethod;
+      order.paymentDetails.paidAt = new Date();
+      
+      console.log('✅ Order status updated to confirmed');
+
+      // ✅ Step 4: خصم الكميات من المنتجات
+      console.log('📦 Deducting inventory...');
+      for (const item of order.cartItems) {
+        try {
+          await Product.findByIdAndUpdate(item.product, {
+            $inc: { quantity: -item.quantity, sold: item.quantity },
+          });
+          console.log(`✅ Inventory updated for product ${item.product}`, {
+            quantity: item.quantity
+          });
+        } catch (error) {
+          console.error(`❌ Failed to update inventory for product ${item.product}`, error);
+          // نكمل حتى لو فشل تحديث منتج واحد
+        }
+      }
+
+      // ✅ Step 5: حذف الـ Cart
+      if (order.cart) {
+        try {
+          console.log('🗑️ Deleting cart...', { cartId: order.cart._id || order.cart });
+          await Cart.findByIdAndDelete(order.cart._id || order.cart);
+          console.log('✅ Cart deleted successfully');
+        } catch (error) {
+          console.error('❌ Failed to delete cart', error);
+          // نكمل حتى لو فشل حذف السلة
+        }
+      }
+
+      // ✅ Step 6: حفظ التغييرات
+      console.log('💾 Saving order...');
+      await order.save();
+      console.log('✅ Order saved successfully');
+
+      // ✅ Step 7: إرسال الإشعار
+      try {
+        console.log('🔔 Sending notification...');
+        await sendNotification(
+          order.user._id,
+          'تم الدفع بنجاح ✅',
+          `تم تأكيد دفع طلبك رقم ${order._id} بنجاح. إجمالي المبلغ: ${order.total} د.ك`,
+          'order'
+        );
+        console.log('✅ Notification sent successfully');
+      } catch (error) {
+        console.error('❌ Failed to send notification', error);
+        // نكمل حتى لو فشل إرسال الإشعار
+      }
+
+      console.log('🎉 Payment processing completed successfully!');
+    } else {
+      console.log('ℹ️ Order already marked as paid, skipping processing');
+    }
+
+    // ✅ Step 8: إرسال HTML Response (فقط بعد إتمام كل العمليات)
+    console.log('📄 Sending HTML response...');
+    const html = `
+      <!DOCTYPE html>
+      <html lang="ar" dir="rtl">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Payment Successful</title>
+          <style>
+              body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+              .container { background: white; padding: 40px; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 400px; }
+              h1 { color: #4CAF50; margin-bottom: 20px; }
+              p { color: #666; margin-bottom: 30px; }
+              .icon { font-size: 80px; margin-bottom: 20px; }
+          </style>
+      </head>
+      <body>
+          <div class="container">
+              <div class="icon">✅</div>
+              <h1>تم الدفع بنجاح!</h1>
+              <p>تمت معالجة الدفع بنجاح. سيتم فتح التطبيق تلقائياً...</p>
+              <p style="font-size: 12px; color: #999;">Order ID: ${order._id}</p>
+          </div>
+      </body>
+      </html>
+    `;
     
-    // خصم الكميات
-    for (const item of order.cartItems) {
-      await Product.findByIdAndUpdate(item.product, {
-        $inc: { quantity: -item.quantity, sold: item.quantity },
-      });
-    }
+    console.log('✅ Payment Success Callback - Complete');
+    return res.send(html);
 
-    // حذف الـ Cart
-    if (order.cart) {
-      await Cart.findByIdAndDelete(order.cart);
-    }
-
-    await order.save();
-
-    // ✅ إرسال الإشعار (بعد الحفظ)
-    await sendNotification(
-      order.user._id,
-      'تم الدفع بنجاح ✅',
-      `تم تأكيد دفع طلبك رقم ${order._id} بنجاح. إجمالي المبلغ: ${order.total} د.ك`,
-      'order'
-    );
+  } catch (error) {
+    console.error('❌ Payment Success Callback - Unexpected Error:', error);
+    return res.redirect(`/payment-error?message=${encodeURIComponent('An error occurred processing your payment')}`);
   }
-
-  // ✅ Render simple page for App Links (Android will intercept this URL)
-  const html = `
-    <!DOCTYPE html>
-    <html lang="ar" dir="rtl">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Payment Successful</title>
-        <style>
-            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-            .container { background: white; padding: 40px; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 400px; }
-            h1 { color: #4CAF50; margin-bottom: 20px; }
-            p { color: #666; margin-bottom: 30px; }
-            .icon { font-size: 80px; margin-bottom: 20px; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="icon">✅</div>
-            <h1>تم الدفع بنجاح!</h1>
-            <p>تمت معالجة الدفع بنجاح. سيتم فتح التطبيق تلقائياً...</p>
-            <p style="font-size: 12px; color: #999;">Order ID: ${order._id}</p>
-        </div>
-    </body>
-    </html>
-  `;
-  
-  return res.send(html);
 });
 
 // ❌ Error Callback (App Links)
