@@ -1,3 +1,4 @@
+// controllers/orderController.js - Updated for Visa Payment
 const asyncHandler = require("express-async-handler");
 const ApiError = require("../utils/apiError");
 const Order = require("../models/orderModel");
@@ -8,122 +9,93 @@ const Address = require("../models/addressModel");
 const Shipping = require("../models/shippingModel");
 const { sendNotification } = require("../utils/sendNotifications");
 
-// 🧮 Helper: حساب الإجماليات
-const calculateOrderTotals = async (cart, coupon, user, city, shippingTypeId = 'standard') => {
-  let discountValue = 0;
-  let totalPrice = 0;
-  let couponMessage = null;
+// Helper function for calculating totals
+const calculateOrderTotals = async (cart, couponCode, user, city, shippingTypeId) => {
+  // ✅ حساب الخصم من الفرق بين السعر الأصلي والسعر بعد الخصم
+  const originalCartPrice = cart.totalCartPrice || 0;
+  const priceAfterCartDiscounts = cart.totalPriceAfterDiscount || cart.totalCartPrice || 0;
+  const cartDiscountValue = originalCartPrice - priceAfterCartDiscounts;
+  
+  let totalPrice = priceAfterCartDiscounts;
+  let discountValue = cartDiscountValue; // ✅ البداية بخصم السلة اللي جاي من الكارت
+  let shippingPrice = 0;
+  let originalShippingCost = 0; // ✅ السعر الأصلي للشحن قبل الخصم
+  let selectedShippingType = null;
+  let couponMessage = "";
 
-  // ✅ استخدام priceAfterOffer من السلة
-  for (const item of cart.cartItems) {
-    const itemPrice = item.priceAfterOffer || item.price || 0;
-    totalPrice += itemPrice * item.quantity;
-  }
-
-  // ✅ تطبيق كوبون الخصم
-  if (coupon) {
-    const offer = await Offer.findOne({ couponCode: coupon });
-    const now = new Date();
-
-    if (!offer) {
-      couponMessage = "❌ هذا الكود غير صحيح أو غير موجود.";
-    } else if (!offer.isActive) {
-      couponMessage = "⚠️ هذا الكود غير مفعل حالياً.";
-    } else if (offer.startDate > now) {
-      couponMessage = "⚠️ هذا الكود لم يبدأ بعد.";
-    } else if (offer.endDate < now) {
-      couponMessage = "⚠️ انتهت صلاحية هذا الكود.";
-    } else if (offer.offerType !== "coupon" && offer.offerType !== "percentage" && offer.offerType !== "fixed") {
-      couponMessage = "⚠️ هذا الكود غير صالح للسلة.";
-    } else {
-      if (offer.offerType === "coupon" || offer.offerType === "percentage") {
-        const discountPercentage = offer.discountValue < 1 
-          ? offer.discountValue * 100 
-          : offer.discountValue;
-        
-        discountValue = totalPrice * (discountPercentage / 100);
-        couponMessage = `✅ تم تطبيق خصم بنسبة ${discountPercentage}%.`;
-      } else if (offer.offerType === "fixed") {
-        discountValue = offer.discountValue;
-        couponMessage = `✅ تم تطبيق خصم بقيمة ${offer.discountValue} د.ك.`;
-      }
+  // 1. Calculate Shipping
+  const shipping = await Shipping.findOne({ city });
+  if (shipping && shipping.shippingTypes && shipping.shippingTypes.length > 0) {
+    // ✅ محاولة إيجاد نوع الشحن المطلوب
+    selectedShippingType = shipping.shippingTypes.find(t => t.type === shippingTypeId && t.isActive);
+    
+    // ✅ لو مش موجود، استخدم أول نوع شحن متاح
+    if (!selectedShippingType) {
+      selectedShippingType = shipping.shippingTypes.find(t => t.isActive) || shipping.shippingTypes[0];
+      console.log(`⚠️ Shipping type "${shippingTypeId}" not found for city "${city}". Using "${selectedShippingType?.type}" instead.`);
+    }
+    
+    if (selectedShippingType) {
+      originalShippingCost = selectedShippingType.cost || 0;
+      shippingPrice = originalShippingCost;
     }
   }
 
-  const totalAfterDiscount = Math.max(totalPrice - discountValue, 0);
-  
-  let shippingPrice = 0;
-  let hasFreeShipping = cart.hasFreeShipping || false;
+  // ✅ Check for Free Shipping Offer (already applied in cart)
+  if (cart.hasFreeShipping && originalShippingCost > 0) {
+    discountValue += originalShippingCost; // ✅ إضافة قيمة الشحن المجاني للخصم
+    shippingPrice = 0;
+  }
 
-  // التحقق من عروض الشحن المجاني
-  if (!hasFreeShipping && city) {
-    const now = new Date();
-    const freeShippingOffer = await Offer.findOne({
+  // 2. Apply Coupon (إضافي على خصم السلة)
+  if (couponCode) {
+    const coupon = await Offer.findOne({
+      couponCode: couponCode,
+      offerType: 'coupon',
       isActive: true,
-      startDate: { $lte: now },
-      endDate: { $gte: now },
-      offerType: "freeShipping",
-      $or: [
-        { targetType: "cart" },
-        { targetType: "order" }
-      ]
+      startDate: { $lte: new Date() },
+      endDate: { $gte: new Date() }
     });
 
-    if (freeShippingOffer) {
-      if (!freeShippingOffer.minCartValue || totalAfterDiscount >= freeShippingOffer.minCartValue) {
-        hasFreeShipping = true;
-      }
+    if (!coupon) {
+      throw new ApiError(`Invalid or expired coupon "${couponCode}"`, 400);
     }
+
+    // Check user group
+    if (coupon.userGroup === 'newUser') {
+        const previousOrders = await Order.countDocuments({ user: user._id });
+        if (previousOrders > 0) {
+          throw new ApiError("This coupon is for new users only", 400);
+        }
+    }
+
+    // Check min cart value
+    if (coupon.minCartValue && totalPrice < coupon.minCartValue) {
+      throw new ApiError(`Coupon requires minimum cart value of ${coupon.minCartValue}`, 400);
+    }
+
+    // Calculate discount (Assuming percentage)
+    let couponDiscount = (totalPrice * coupon.discountValue) / 100;
+    
+    if (couponDiscount > totalPrice) couponDiscount = totalPrice;
+    
+    totalPrice -= couponDiscount;
+    discountValue += couponDiscount; // ✅ إضافة خصم الكوبون على خصم السلة
+    couponMessage = "Coupon applied successfully";
   }
 
-  // حساب تكلفة الشحن
-  let selectedShippingType = null;
-  if (!hasFreeShipping && city) {
-    const shipping = await Shipping.findOne({ city });
-    if (shipping && shipping.shippingTypes && shipping.shippingTypes.length > 0) {
-      selectedShippingType = shipping.shippingTypes.find(t => t.type === shippingTypeId && t.isActive);
-      if (!selectedShippingType) {
-        selectedShippingType = shipping.shippingTypes.find(t => t.type === 'standard' && t.isActive);
-      }
-      shippingPrice = selectedShippingType ? selectedShippingType.cost : 0;
-    } else if (shipping && shipping.cost) {
-      shippingPrice = shipping.cost;
-    }
-  }
-
-  const totalOrderPrice = totalAfterDiscount + shippingPrice;
+  const totalOrderPrice = totalPrice + shippingPrice;
 
   return {
-    totalPrice,
-    discountValue,
-    shippingPrice,
+    totalPrice: originalCartPrice, // ✅ السعر الأصلي قبل أي خصم
+    discountValue, // ✅ مجموع كل الخصومات (سلة + شحن مجاني + كوبون)
+    shippingPrice, // ✅ السعر الفعلي للشحن (0 لو مجاني)
+    originalShippingCost, // ✅ السعر الأصلي للشحن قبل الخصم
     totalOrderPrice,
-    couponMessage,
-    hasFreeShipping,
     selectedShippingType,
+    couponMessage
   };
 };
-
-// =============================
-// 🧾 PREVIEW ORDER
-// =============================
-exports.previewOrder = asyncHandler(async (req, res, next) => {
-  const { cartId, coupon } = req.body;
-  const cart = await Cart.findById(cartId).populate("cartItems.product");
-
-  if (!cart) return next(new ApiError("Cart not found", 404));
-
-  const totals = await calculateOrderTotals(cart, coupon, req.user);
-
-  res.status(200).json({
-    status: "success",
-    message: "Order preview calculated successfully",
-    data: {
-      products: cart.cartItems,
-      ...totals,
-    },
-  });
-});
 
 // =============================
 // ✅ CREATE ORDER
@@ -164,20 +136,16 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
   // ✅ Calculate estimated delivery date
   let estimatedDelivery = new Date();
   let shippingTypeInfo = {
-    type: shippingTypeId,
-    name: 'شحن عادي',
-    deliveryTime: '2-3 أيام',
+    _id: totals.selectedShippingType?._id || null,
+    type: totals.selectedShippingType?.type || shippingTypeId,
+    name: totals.selectedShippingType?.name || 'شحن عادي',
+    deliveryTime: totals.selectedShippingType?.deliveryTime || '2-3 أيام',
+    cost: totals.originalShippingCost, // ✅ السعر الأصلي للشحن (حتى لو مجاني)
     selectedAt: new Date()
   };
 
   if (totals.selectedShippingType) {
-    shippingTypeInfo = {
-      type: totals.selectedShippingType.type,
-      name: totals.selectedShippingType.name,
-      deliveryTime: totals.selectedShippingType.deliveryTime,
-      selectedAt: new Date()
-    };
-    estimatedDelivery.setHours(estimatedDelivery.getHours() + totals.selectedShippingType.deliveryHours);
+    estimatedDelivery.setHours(estimatedDelivery.getHours() + (totals.selectedShippingType.deliveryHours || 48));
   } else {
     estimatedDelivery.setHours(estimatedDelivery.getHours() + 48);
   }
@@ -327,7 +295,6 @@ exports.getOrder = asyncHandler(async (req, res, next) => {
         await order.save();
         
         // إرسال إشعار (في الخلفية عشان ما نعطلش الرد)
-        const { sendNotification } = require("../utils/sendNotifications");
         sendNotification(
           order.user._id,
           'تم الدفع بنجاح ✅',
@@ -366,7 +333,6 @@ exports.updateOrderStatus = asyncHandler(async (req, res, next) => {
   order.status = status;
   await order.save();
 
-  const { sendNotification } = require("../utils/sendNotifications");
   await sendNotification(
     order.user._id,
     "تم تحديث حالة الطلب",
@@ -392,7 +358,6 @@ exports.cancelOrder = asyncHandler(async (req, res, next) => {
   order.status = "cancelled_by_user";
   await order.save();
 
-  const { sendNotification } = require("../utils/sendNotifications");
   await sendNotification(
     req.user._id,
     "تم إلغاء الطلب",
