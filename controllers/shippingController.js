@@ -36,10 +36,23 @@ exports.getAllCities = asyncHandler(async (req, res) => {
 // @desc Update shipping cost or types
 exports.updateCity = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
-  const { cost, shippingTypes } = req.body;
+  const { city: cityName, cost, shippingTypes } = req.body;
 
   const city = await Shipping.findById(id);
   if (!city) return next(new ApiError("City not found", 404));
+
+  // ✅ Update city name if provided
+  if (cityName !== undefined) {
+    // Check if new city name already exists (except for current city)
+    const existingCity = await Shipping.findOne({ 
+      city: cityName, 
+      _id: { $ne: id } 
+    });
+    if (existingCity) {
+      return next(new ApiError("City name already exists", 400));
+    }
+    city.city = cityName;
+  }
 
   // ✅ Support both old format (cost) and new format (shippingTypes)
   if (shippingTypes && Array.isArray(shippingTypes)) {
