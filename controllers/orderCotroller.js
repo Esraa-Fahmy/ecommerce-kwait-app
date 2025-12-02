@@ -4,118 +4,6 @@ const ApiError = require("../utils/apiError");
 const Order = require("../models/orderModel");
 const Cart = require("../models/cartModel");
 const Offer = require("../models/offer.model");
-const Product = require("../models/product.model");
-const Address = require("../models/addressModel");
-const Shipping = require("../models/shippingModel");
-const { sendNotification } = require("../utils/sendNotifications");
-
-// 🧮 Helper: حساب الإجماليات
-const calculateOrderTotals = async (cart, coupon, user, city, shippingTypeId = 'standard') => {
-  let discountValue = 0;
-  let totalPrice = 0;
-  let couponMessage = null;
-
-  // ✅ استخدام priceAfterOffer من السلة
-  for (const item of cart.cartItems) {
-    const itemPrice = item.priceAfterOffer || item.price || 0;
-    totalPrice += itemPrice * item.quantity;
-  }
-
-  // ✅ تطبيق كوبون الخصم
-  if (coupon) {
-    const offer = await Offer.findOne({ couponCode: coupon });
-    const now = new Date();
-
-    if (!offer) {
-      couponMessage = "❌ هذا الكود غير صحيح أو غير موجود.";
-    } else if (!offer.isActive) {
-      couponMessage = "⚠️ هذا الكود غير مفعل حالياً.";
-    } else if (offer.startDate > now) {
-      couponMessage = "⚠️ هذا الكود لم يبدأ بعد.";
-    } else if (offer.endDate < now) {
-      couponMessage = "⚠️ انتهت صلاحية هذا الكود.";
-    } else if (offer.offerType !== "coupon" && offer.offerType !== "percentage" && offer.offerType !== "fixed") {
-      couponMessage = "⚠️ هذا الكود غير صالح للسلة.";
-    } else {
-      if (offer.offerType === "coupon" || offer.offerType === "percentage") {
-        const discountPercentage = offer.discountValue < 1 
-          ? offer.discountValue * 100 
-          : offer.discountValue;
-        
-        discountValue = totalPrice * (discountPercentage / 100);
-        couponMessage = `✅ تم تطبيق خصم بنسبة ${discountPercentage}%.`;
-      } else if (offer.offerType === "fixed") {
-        discountValue = offer.discountValue;
-        couponMessage = `✅ تم تطبيق خصم بقيمة ${offer.discountValue} د.ك.`;
-      }
-    }
-  }
-
-  const totalAfterDiscount = Math.max(totalPrice - discountValue, 0);
-  
-  let shippingPrice = 0;
-  let hasFreeShipping = cart.hasFreeShipping || false;
-
-  // التحقق من عروض الشحن المجاني
-  if (!hasFreeShipping && city) {
-    const now = new Date();
-    const freeShippingOffer = await Offer.findOne({
-      isActive: true,
-      startDate: { $lte: now },
-      endDate: { $gte: now },
-      offerType: "freeShipping",
-      $or: [
-        { targetType: "cart" },
-        { targetType: "order" }
-      ]
-    });
-
-    if (freeShippingOffer) {
-      if (!freeShippingOffer.minCartValue || totalAfterDiscount >= freeShippingOffer.minCartValue) {
-        hasFreeShipping = true;
-      }
-    }
-  }
-
-  // حساب تكلفة الشحن
-  let selectedShippingType = null;
-  if (!hasFreeShipping && city) {
-    const shipping = await Shipping.findOne({ city });
-    if (shipping && shipping.shippingTypes && shipping.shippingTypes.length > 0) {
-      selectedShippingType = shipping.shippingTypes.find(t => t.type === shippingTypeId && t.isActive);
-      if (!selectedShippingType) {
-        selectedShippingType = shipping.shippingTypes.find(t => t.type === 'standard' && t.isActive);
-      }
-      shippingPrice = selectedShippingType ? selectedShippingType.cost : 0;
-    } else if (shipping && shipping.cost) {
-      shippingPrice = shipping.cost;
-    }
-  }
-
-  const totalOrderPrice = totalAfterDiscount + shippingPrice;
-
-  return {
-    totalPrice,
-    discountValue,
-    shippingPrice,
-    totalOrderPrice,
-    couponMessage,
-    hasFreeShipping,
-    selectedShippingType,
-  };
-};
-
-// =============================
-// 🧾 PREVIEW ORDER
-// =============================
-exports.previewOrder = asyncHandler(async (req, res, next) => {
-  const { cartId, coupon } = req.body;
-  const cart = await Cart.findById(cartId).populate("cartItems.product");
-
-  if (!cart) return next(new ApiError("Cart not found", 404));
-
-  const totals = await calculateOrderTotals(cart, coupon, req.user);
-
   res.status(200).json({
     status: "success",
     message: "Order preview calculated successfully",
@@ -124,7 +12,7 @@ exports.previewOrder = asyncHandler(async (req, res, next) => {
       ...totals,
     },
   });
-});
+
 
 // =============================
 // ✅ CREATE ORDER
