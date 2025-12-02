@@ -36,9 +36,15 @@ const cartSchema = new mongoose.Schema({
     },
   ],
 
-  totalCartPrice: Number,
-  totalPriceAfterDiscount: Number,
-  hasFreeShipping: { type: Boolean, default: false }, // للشحن المجاني
+  totalCartPrice: Number, // السعر قبل أي خصم
+  totalPriceAfterDiscount: Number, // السعر بعد الخصم
+  hasFreeShipping: { type: Boolean, default: false },
+  
+  // ✅ جميع العروض المطبقة على السلة (array واحد)
+  appliedOffers: {
+    type: [mongoose.Schema.Types.Mixed],
+    default: [],
+  },
 
   user: {
     type: mongoose.Schema.ObjectId,

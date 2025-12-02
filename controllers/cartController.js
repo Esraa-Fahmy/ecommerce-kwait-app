@@ -126,21 +126,23 @@ const applyOffersOnItem = async (item) => {
 
 // ⚙️ إعادة حساب الإجمالي بعد العروض
 const recalcCartTotals = async (cart) => {
-  let totalPrice = 0;
-  let totalAfter = 0;
+  let totalPriceBeforeOffers = 0; // السعر الأصلي قبل أي خصم
+  let totalAfterProductOffers = 0; // السعر بعد خصومات المنتجات
 
   // حساب إجمالي المنتجات بعد تطبيق العروض على كل منتج
   for (let i = 0; i < cart.cartItems.length; i++) {
     const item = cart.cartItems[i];
     const updatedItem = await applyOffersOnItem(item);
-    const priceUsed = Number(updatedItem.priceAfterOffer ?? updatedItem.price ?? 0);
+    
+    const originalPrice = Number(updatedItem.price ?? 0);
+    const priceAfterOffer = Number(updatedItem.priceAfterOffer ?? updatedItem.price ?? 0);
     const qty = Number(updatedItem.quantity ?? 0);
-    const itemTotal = priceUsed * qty;
 
-    if (!isNaN(itemTotal)) {
-      totalPrice += Number(updatedItem.price ?? 0) * qty;
-      totalAfter += itemTotal;
-    }
+    // السعر الأصلي قبل أي خصم
+    totalPriceBeforeOffers += originalPrice * qty;
+    
+    // السعر بعد خصومات المنتجات
+    totalAfterProductOffers += priceAfterOffer * qty;
     
     // ✅ حفظ معلومات العرض المطبق في الكارت
     cart.cartItems[i].price = updatedItem.price;
@@ -165,33 +167,51 @@ const recalcCartTotals = async (cart) => {
 
   let cartDiscountValue = 0;
   let hasFreeShipping = false;
+  let appliedOffers = []; // ✅ Array لجميع العروض
 
   if (cartOffers.length > 0) {
     for (const offer of cartOffers) {
       // تطبيق خصم السلة
       if (offer.offerType === "cartDiscount") {
         // التحقق من الحد الأدنى لقيمة السلة
-        if (!offer.minCartValue || totalAfter >= offer.minCartValue) {
+        if (!offer.minCartValue || totalAfterProductOffers >= offer.minCartValue) {
           if (offer.discountValue) {
-            cartDiscountValue = totalAfter * (offer.discountValue / 100);
+            cartDiscountValue = totalAfterProductOffers * (offer.discountValue / 100);
+            // ✅ إضافة العرض للـ array
+            appliedOffers.push({
+              _id: offer._id,
+              title: offer.title,
+              offerType: offer.offerType,
+              discountValue: offer.discountValue,
+              discountAmount: cartDiscountValue,
+              minCartValue: offer.minCartValue || 0
+            });
           }
         }
       }
       // تطبيق الشحن المجاني
       else if (offer.offerType === "freeShipping") {
-        if (!offer.minCartValue || totalAfter >= offer.minCartValue) {
+        if (!offer.minCartValue || totalAfterProductOffers >= offer.minCartValue) {
           hasFreeShipping = true;
+          // ✅ إضافة العرض للـ array
+          appliedOffers.push({
+            _id: offer._id,
+            title: offer.title,
+            offerType: offer.offerType,
+            minCartValue: offer.minCartValue || 0
+          });
         }
       }
     }
   }
 
   // تطبيق خصم السلة على الإجمالي
-  totalAfter = Math.max(totalAfter - cartDiscountValue, 0);
+  const totalAfterAllDiscounts = Math.max(totalAfterProductOffers - cartDiscountValue, 0);
 
-  cart.totalCartPrice = Number(totalAfter) || 0;
-  cart.totalPriceAfterDiscount = Number(totalAfter) || 0;
-  cart.hasFreeShipping = hasFreeShipping; // حفظ حالة الشحن المجاني
+  cart.totalCartPrice = Number(totalPriceBeforeOffers) || 0; // ✅ السعر قبل أي خصم
+  cart.totalPriceAfterDiscount = Number(totalAfterAllDiscounts) || 0; // ✅ السعر بعد كل الخصومات
+  cart.hasFreeShipping = hasFreeShipping;
+  cart.appliedOffers = appliedOffers; // ✅ حفظ جميع العروض
   await cart.save();
 };
 
