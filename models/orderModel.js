@@ -1,4 +1,3 @@
-// models/orderModel.js - Updated Version
 const mongoose = require('mongoose');
 
 const orderSchema = new mongoose.Schema({
@@ -50,15 +49,9 @@ const orderSchema = new mongoose.Schema({
     failedAt: Date,
     refundId: String,
     refundedAt: Date,
-    refundId: String,
-    refundedAt: Date,
   },
 
-  // ✅ جميع العروض المطبقة على الطلب (سلة، شحن مجاني، كوبون)
-  appliedOffers: {
-    type: [mongoose.Schema.Types.Mixed],
-    default: [],
-  },
+  shippingCost: { type: Number, default: 0 },
   
   // ✅ معلومات نوع الشحن المختار (with ObjectId reference)
   shippingType: {

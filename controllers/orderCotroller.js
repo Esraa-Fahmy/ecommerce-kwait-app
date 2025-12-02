@@ -8,76 +8,122 @@ const Address = require("../models/addressModel");
 const Shipping = require("../models/shippingModel");
 const { sendNotification } = require("../utils/sendNotifications");
 
-// Helper function for calculating totals
-const calculateOrderTotals = async (cart, couponCode, user, city, shippingTypeId) => {
-  let totalPrice = cart.totalPriceAfterDiscount || cart.totalCartPrice;
+// 🧮 Helper: حساب الإجماليات
+const calculateOrderTotals = async (cart, coupon, user, city, shippingTypeId = 'standard') => {
   let discountValue = 0;
-  let shippingPrice = 0;
-  let selectedShippingType = null;
-  let couponMessage = "";
+  let totalPrice = 0;
+  let couponMessage = null;
 
-  // 1. Calculate Shipping
-  const shipping = await Shipping.findOne({ city });
-  if (shipping && shipping.shippingTypes) {
-    selectedShippingType = shipping.shippingTypes.find(t => t.type === shippingTypeId);
-    if (selectedShippingType) {
-      shippingPrice = selectedShippingType.cost;
+  // ✅ استخدام priceAfterOffer من السلة
+  for (const item of cart.cartItems) {
+    const itemPrice = item.priceAfterOffer || item.price || 0;
+    totalPrice += itemPrice * item.quantity;
+  }
+
+  // ✅ تطبيق كوبون الخصم
+  if (coupon) {
+    const offer = await Offer.findOne({ couponCode: coupon });
+    const now = new Date();
+
+    if (!offer) {
+      couponMessage = "❌ هذا الكود غير صحيح أو غير موجود.";
+    } else if (!offer.isActive) {
+      couponMessage = "⚠️ هذا الكود غير مفعل حالياً.";
+    } else if (offer.startDate > now) {
+      couponMessage = "⚠️ هذا الكود لم يبدأ بعد.";
+    } else if (offer.endDate < now) {
+      couponMessage = "⚠️ انتهت صلاحية هذا الكود.";
+    } else if (offer.offerType !== "coupon" && offer.offerType !== "percentage" && offer.offerType !== "fixed") {
+      couponMessage = "⚠️ هذا الكود غير صالح للسلة.";
+    } else {
+      if (offer.offerType === "coupon" || offer.offerType === "percentage") {
+        const discountPercentage = offer.discountValue < 1 
+          ? offer.discountValue * 100 
+          : offer.discountValue;
+        
+        discountValue = totalPrice * (discountPercentage / 100);
+        couponMessage = `✅ تم تطبيق خصم بنسبة ${discountPercentage}%.`;
+      } else if (offer.offerType === "fixed") {
+        discountValue = offer.discountValue;
+        couponMessage = `✅ تم تطبيق خصم بقيمة ${offer.discountValue} د.ك.`;
+      }
     }
   }
 
-  // Check for Free Shipping Offer (already applied in cart)
-  if (cart.hasFreeShipping) {
-    shippingPrice = 0;
-  }
+  const totalAfterDiscount = Math.max(totalPrice - discountValue, 0);
+  
+  let shippingPrice = 0;
+  let hasFreeShipping = cart.hasFreeShipping || false;
 
-  // 2. Apply Coupon
-  if (couponCode) {
-    const coupon = await Offer.findOne({
-      couponCode: couponCode,
-      offerType: 'coupon',
+  // التحقق من عروض الشحن المجاني
+  if (!hasFreeShipping && city) {
+    const now = new Date();
+    const freeShippingOffer = await Offer.findOne({
       isActive: true,
-      startDate: { $lte: new Date() },
-      endDate: { $gte: new Date() }
+      startDate: { $lte: now },
+      endDate: { $gte: now },
+      offerType: "freeShipping",
+      $or: [
+        { targetType: "cart" },
+        { targetType: "order" }
+      ]
     });
 
-    if (!coupon) {
-      throw new ApiError("Invalid or expired coupon", 400);
+    if (freeShippingOffer) {
+      if (!freeShippingOffer.minCartValue || totalAfterDiscount >= freeShippingOffer.minCartValue) {
+        hasFreeShipping = true;
+      }
     }
-
-    // Check user group
-    if (coupon.userGroup === 'newUser') {
-        const previousOrders = await Order.countDocuments({ user: user._id });
-        if (previousOrders > 0) {
-          throw new ApiError("This coupon is for new users only", 400);
-        }
-    }
-
-    // Check min cart value
-    if (coupon.minCartValue && totalPrice < coupon.minCartValue) {
-      throw new ApiError(`Coupon requires minimum cart value of ${coupon.minCartValue}`, 400);
-    }
-
-    // Calculate discount (Assuming percentage)
-    let couponDiscount = (totalPrice * coupon.discountValue) / 100;
-    
-    if (couponDiscount > totalPrice) couponDiscount = totalPrice;
-    
-    totalPrice -= couponDiscount;
-    discountValue += couponDiscount;
-    couponMessage = "Coupon applied successfully";
   }
 
-  const totalOrderPrice = totalPrice + shippingPrice;
+  // حساب تكلفة الشحن
+  let selectedShippingType = null;
+  if (!hasFreeShipping && city) {
+    const shipping = await Shipping.findOne({ city });
+    if (shipping && shipping.shippingTypes && shipping.shippingTypes.length > 0) {
+      selectedShippingType = shipping.shippingTypes.find(t => t.type === shippingTypeId && t.isActive);
+      if (!selectedShippingType) {
+        selectedShippingType = shipping.shippingTypes.find(t => t.type === 'standard' && t.isActive);
+      }
+      shippingPrice = selectedShippingType ? selectedShippingType.cost : 0;
+    } else if (shipping && shipping.cost) {
+      shippingPrice = shipping.cost;
+    }
+  }
+
+  const totalOrderPrice = totalAfterDiscount + shippingPrice;
 
   return {
-    totalPrice: cart.totalPriceAfterDiscount || cart.totalCartPrice,
+    totalPrice,
     discountValue,
     shippingPrice,
     totalOrderPrice,
+    couponMessage,
+    hasFreeShipping,
     selectedShippingType,
-    couponMessage
   };
 };
+
+// =============================
+// 🧾 PREVIEW ORDER
+// =============================
+exports.previewOrder = asyncHandler(async (req, res, next) => {
+  const { cartId, coupon } = req.body;
+  const cart = await Cart.findById(cartId).populate("cartItems.product");
+
+  if (!cart) return next(new ApiError("Cart not found", 404));
+
+  const totals = await calculateOrderTotals(cart, coupon, req.user);
+
+  res.status(200).json({
+    status: "success",
+    message: "Order preview calculated successfully",
+    data: {
+      products: cart.cartItems,
+      ...totals,
+    },
+  });
+});
 
 // =============================
 // ✅ CREATE ORDER
@@ -281,6 +327,7 @@ exports.getOrder = asyncHandler(async (req, res, next) => {
         await order.save();
         
         // إرسال إشعار (في الخلفية عشان ما نعطلش الرد)
+        const { sendNotification } = require("../utils/sendNotifications");
         sendNotification(
           order.user._id,
           'تم الدفع بنجاح ✅',
@@ -319,6 +366,7 @@ exports.updateOrderStatus = asyncHandler(async (req, res, next) => {
   order.status = status;
   await order.save();
 
+  const { sendNotification } = require("../utils/sendNotifications");
   await sendNotification(
     order.user._id,
     "تم تحديث حالة الطلب",
@@ -344,6 +392,7 @@ exports.cancelOrder = asyncHandler(async (req, res, next) => {
   order.status = "cancelled_by_user";
   await order.save();
 
+  const { sendNotification } = require("../utils/sendNotifications");
   await sendNotification(
     req.user._id,
     "تم إلغاء الطلب",
