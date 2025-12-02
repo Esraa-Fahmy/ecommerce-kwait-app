@@ -1,4 +1,3 @@
-// controllers/orderController.js - Updated for Visa Payment
 const asyncHandler = require("express-async-handler");
 const ApiError = require("../utils/apiError");
 const Order = require("../models/orderModel");
@@ -283,15 +282,64 @@ exports.getAllOrders = asyncHandler(async (req, res) => {
 });
 
 // =============================
-// 🧾 GET SINGLE ORDER
+// 🧾 GET SINGLE ORDER (With Smart Payment Check)
 // =============================
 exports.getOrder = asyncHandler(async (req, res, next) => {
-  const order = await Order.findById(req.params.id)
+  let order = await Order.findById(req.params.id)
     .populate("user", "firstName lastName email phone")
     .populate("cartItems.product", "code title price imageCover")
     .populate("cartItems.appliedOffer");
 
   if (!order) return next(new ApiError("Order not found", 404));
+
+  // 🧠 Smart Check: لو الأوردر لسه pending وفيه invoiceId، نتأكد من MyFatoorah فوراً
+  if (
+    order.paymentMethod === 'visa' && 
+    order.paymentDetails.status !== 'paid' && 
+    order.paymentDetails.invoiceId
+  ) {
+    try {
+      const myFatoorah = require("../utils/myFatoorah");
+      const paymentStatus = await myFatoorah.getPaymentStatus(order.paymentDetails.invoiceId, 'InvoiceId');
+
+      if (paymentStatus.success && paymentStatus.status === 'Paid') {
+        console.log(`🧠 Smart Check: Order ${order._id} found PAID in MyFatoorah. Updating...`);
+        
+        // تحديث الأوردر
+        order.status = 'confirmed';
+        order.paymentDetails.status = 'paid';
+        order.paymentDetails.transactionId = paymentStatus.transactionId;
+        order.paymentDetails.paymentMethod = paymentStatus.paymentMethod;
+        order.paymentDetails.paidAt = new Date();
+
+        // خصم الكميات
+        for (const item of order.cartItems) {
+          await Product.findByIdAndUpdate(item.product._id, {
+            $inc: { quantity: -item.quantity, sold: item.quantity },
+          });
+        }
+
+        // حذف السلة
+        if (order.cart) {
+          await Cart.findByIdAndDelete(order.cart);
+        }
+
+        await order.save();
+        
+        // إرسال إشعار (في الخلفية عشان ما نعطلش الرد)
+        const { sendNotification } = require("../utils/sendNotifications");
+        sendNotification(
+          order.user._id,
+          'تم الدفع بنجاح ✅',
+          `تم تأكيد دفع طلبك رقم ${order._id} بنجاح.`,
+          'order'
+        ).catch(err => console.error('Notification Error:', err));
+      }
+    } catch (error) {
+      console.error('❌ Smart Check Error:', error.message);
+      // نكمل عادي ونرجع الأوردر بحالته الحالية لو حصل خطأ في التحقق
+    }
+  }
   
   let orderResponse = order.toObject();
   if (orderResponse.paymentMethod === 'cod') {
@@ -318,6 +366,7 @@ exports.updateOrderStatus = asyncHandler(async (req, res, next) => {
   order.status = status;
   await order.save();
 
+  const { sendNotification } = require("../utils/sendNotifications");
   await sendNotification(
     order.user._id,
     "تم تحديث حالة الطلب",
@@ -343,6 +392,7 @@ exports.cancelOrder = asyncHandler(async (req, res, next) => {
   order.status = "cancelled_by_user";
   await order.save();
 
+  const { sendNotification } = require("../utils/sendNotifications");
   await sendNotification(
     req.user._id,
     "تم إلغاء الطلب",
