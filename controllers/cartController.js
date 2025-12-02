@@ -141,6 +141,13 @@ const recalcCartTotals = async (cart) => {
       totalPrice += Number(updatedItem.price ?? 0) * qty;
       totalAfter += itemTotal;
     }
+    
+    // ✅ حفظ معلومات العرض المطبق في الكارت
+    cart.cartItems[i].price = updatedItem.price;
+    cart.cartItems[i].priceAfterOffer = updatedItem.priceAfterOffer;
+    cart.cartItems[i].priceTotal = updatedItem.priceTotal;
+    cart.cartItems[i].appliedOffer = updatedItem.appliedOffer || null;
+    cart.cartItems[i].upcomingOffers = updatedItem.upcomingOffers || [];
   }
 
   // ✅ البحث عن عروض على مستوى السلة (cartDiscount, freeShipping)
