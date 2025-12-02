@@ -19,7 +19,6 @@ const calculateOrderTotals = async (cart, couponCode, user, city, shippingTypeId
   let totalPrice = priceAfterCartDiscounts;
   let discountValue = cartDiscountValue; // ✅ البداية بخصم السلة اللي جاي من الكارت
   let shippingPrice = 0;
-  let originalShippingCost = 0; // ✅ السعر الأصلي للشحن قبل الخصم
   let selectedShippingType = null;
   let couponMessage = "";
 
@@ -36,14 +35,12 @@ const calculateOrderTotals = async (cart, couponCode, user, city, shippingTypeId
     }
     
     if (selectedShippingType) {
-      originalShippingCost = selectedShippingType.cost || 0;
-      shippingPrice = originalShippingCost;
+      shippingPrice = selectedShippingType.cost || 0;
     }
   }
 
-  // ✅ Check for Free Shipping Offer (already applied in cart)
-  if (cart.hasFreeShipping && originalShippingCost > 0) {
-    discountValue += originalShippingCost; // ✅ إضافة قيمة الشحن المجاني للخصم
+  // Check for Free Shipping Offer (already applied in cart)
+  if (cart.hasFreeShipping) {
     shippingPrice = 0;
   }
 
@@ -58,7 +55,7 @@ const calculateOrderTotals = async (cart, couponCode, user, city, shippingTypeId
     });
 
     if (!coupon) {
-      throw new ApiError(`Invalid or expired coupon "${couponCode}"`, 400);
+      throw new ApiError("Invalid or expired coupon", 400);
     }
 
     // Check user group
@@ -88,9 +85,8 @@ const calculateOrderTotals = async (cart, couponCode, user, city, shippingTypeId
 
   return {
     totalPrice: originalCartPrice, // ✅ السعر الأصلي قبل أي خصم
-    discountValue, // ✅ مجموع كل الخصومات (سلة + شحن مجاني + كوبون)
-    shippingPrice, // ✅ السعر الفعلي للشحن (0 لو مجاني)
-    originalShippingCost, // ✅ السعر الأصلي للشحن قبل الخصم
+    discountValue, // ✅ مجموع كل الخصومات
+    shippingPrice,
     totalOrderPrice,
     selectedShippingType,
     couponMessage
@@ -140,7 +136,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
     type: totals.selectedShippingType?.type || shippingTypeId,
     name: totals.selectedShippingType?.name || 'شحن عادي',
     deliveryTime: totals.selectedShippingType?.deliveryTime || '2-3 أيام',
-    cost: totals.originalShippingCost, // ✅ السعر الأصلي للشحن (حتى لو مجاني)
+    cost: totals.shippingPrice,
     selectedAt: new Date()
   };
 
