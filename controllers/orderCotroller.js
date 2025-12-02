@@ -1,4 +1,3 @@
-// controllers/orderController.js - Updated for Visa Payment
 const asyncHandler = require("express-async-handler");
 const ApiError = require("../utils/apiError");
 const Order = require("../models/orderModel");
@@ -7,6 +6,7 @@ const Offer = require("../models/offer.model");
 const Product = require("../models/product.model");
 const Address = require("../models/addressModel");
 const Shipping = require("../models/shippingModel");
+const { sendNotification } = require("../utils/sendNotifications");
 
 // Helper function for calculating totals
 const calculateOrderTotals = async (cart, couponCode, user, city, shippingTypeId) => {
@@ -281,7 +281,6 @@ exports.getOrder = asyncHandler(async (req, res, next) => {
         await order.save();
         
         // إرسال إشعار (في الخلفية عشان ما نعطلش الرد)
-        const { sendNotification } = require("../utils/sendNotifications");
         sendNotification(
           order.user._id,
           'تم الدفع بنجاح ✅',
@@ -320,7 +319,6 @@ exports.updateOrderStatus = asyncHandler(async (req, res, next) => {
   order.status = status;
   await order.save();
 
-  const { sendNotification } = require("../utils/sendNotifications");
   await sendNotification(
     order.user._id,
     "تم تحديث حالة الطلب",
@@ -346,7 +344,6 @@ exports.cancelOrder = asyncHandler(async (req, res, next) => {
   order.status = "cancelled_by_user";
   await order.save();
 
-  const { sendNotification } = require("../utils/sendNotifications");
   await sendNotification(
     req.user._id,
     "تم إلغاء الطلب",
