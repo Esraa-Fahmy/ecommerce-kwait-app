@@ -4,15 +4,80 @@ const ApiError = require("../utils/apiError");
 const Order = require("../models/orderModel");
 const Cart = require("../models/cartModel");
 const Offer = require("../models/offer.model");
-  res.status(200).json({
-    status: "success",
-    message: "Order preview calculated successfully",
-    data: {
-      products: cart.cartItems,
-      ...totals,
-    },
-  });
+const Product = require("../models/product.model");
+const Address = require("../models/addressModel");
+const Shipping = require("../models/shippingModel");
 
+// Helper function for calculating totals
+const calculateOrderTotals = async (cart, couponCode, user, city, shippingTypeId) => {
+  let totalPrice = cart.totalPriceAfterDiscount || cart.totalCartPrice;
+  let discountValue = 0;
+  let shippingPrice = 0;
+  let selectedShippingType = null;
+  let couponMessage = "";
+
+  // 1. Calculate Shipping
+  const shipping = await Shipping.findOne({ city });
+  if (shipping && shipping.shippingTypes) {
+    selectedShippingType = shipping.shippingTypes.find(t => t.type === shippingTypeId);
+    if (selectedShippingType) {
+      shippingPrice = selectedShippingType.cost;
+    }
+  }
+
+  // Check for Free Shipping Offer (already applied in cart)
+  if (cart.hasFreeShipping) {
+    shippingPrice = 0;
+  }
+
+  // 2. Apply Coupon
+  if (couponCode) {
+    const coupon = await Offer.findOne({
+      couponCode: couponCode,
+      offerType: 'coupon',
+      isActive: true,
+      startDate: { $lte: new Date() },
+      endDate: { $gte: new Date() }
+    });
+
+    if (!coupon) {
+      throw new ApiError("Invalid or expired coupon", 400);
+    }
+
+    // Check user group
+    if (coupon.userGroup === 'newUser') {
+        const previousOrders = await Order.countDocuments({ user: user._id });
+        if (previousOrders > 0) {
+          throw new ApiError("This coupon is for new users only", 400);
+        }
+    }
+
+    // Check min cart value
+    if (coupon.minCartValue && totalPrice < coupon.minCartValue) {
+      throw new ApiError(`Coupon requires minimum cart value of ${coupon.minCartValue}`, 400);
+    }
+
+    // Calculate discount (Assuming percentage)
+    let couponDiscount = (totalPrice * coupon.discountValue) / 100;
+    
+    if (couponDiscount > totalPrice) couponDiscount = totalPrice;
+    
+    totalPrice -= couponDiscount;
+    discountValue += couponDiscount;
+    couponMessage = "Coupon applied successfully";
+  }
+
+  const totalOrderPrice = totalPrice + shippingPrice;
+
+  return {
+    totalPrice: cart.totalPriceAfterDiscount || cart.totalCartPrice,
+    discountValue,
+    shippingPrice,
+    totalOrderPrice,
+    selectedShippingType,
+    couponMessage
+  };
+};
 
 // =============================
 // ✅ CREATE ORDER

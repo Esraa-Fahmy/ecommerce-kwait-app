@@ -1,6 +1,5 @@
 const express = require("express");
 const {
-  previewOrder,
   createOrder,
   getUserOrders,
   getAllOrders,
@@ -14,12 +13,6 @@ const { protect, allowedTo } = require("../controllers/auth.controller");
 const { createOrderValidator } = require("../validators/orderValidation");
 
 const router = express.Router();
-
-// =============================
-// 🧾 Preview Order (قبل الإنشاء)
-// =============================
-// ⬅️ المستخدم يراجع السعر قبل ما يعمل الطلب
-router.post("/preview",  protect, allowedTo("user"), previewOrder);
 
 // =============================
 // ✅ Create Order (إنشاء أوردر جديد)
