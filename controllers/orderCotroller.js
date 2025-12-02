@@ -58,7 +58,7 @@ const calculateOrderTotals = async (cart, couponCode, user, city, shippingTypeId
     });
 
     if (!coupon) {
-      throw new ApiError("Invalid or expired coupon", 400);
+      throw new ApiError(`Invalid or expired coupon "${couponCode}"`, 400);
     }
 
     // Check user group
