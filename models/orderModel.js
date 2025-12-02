@@ -50,9 +50,15 @@ const orderSchema = new mongoose.Schema({
     failedAt: Date,
     refundId: String,
     refundedAt: Date,
+    refundId: String,
+    refundedAt: Date,
   },
 
-  shippingCost: { type: Number, default: 0 },
+  // ✅ جميع العروض المطبقة على الطلب (سلة، شحن مجاني، كوبون)
+  appliedOffers: {
+    type: [mongoose.Schema.Types.Mixed],
+    default: [],
+  },
   
   // ✅ معلومات نوع الشحن المختار (with ObjectId reference)
   shippingType: {
