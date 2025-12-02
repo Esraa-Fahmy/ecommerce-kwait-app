@@ -7,35 +7,21 @@ const Offer = require("../models/offer.model");
 const Product = require("../models/product.model");
 const Address = require("../models/addressModel");
 const Shipping = require("../models/shippingModel");
-const { sendNotification } = require("../utils/sendNotifications");
 
 // Helper function for calculating totals
 const calculateOrderTotals = async (cart, couponCode, user, city, shippingTypeId) => {
-  // ✅ حساب الخصم من الفرق بين السعر الأصلي والسعر بعد الخصم
-  const originalCartPrice = cart.totalCartPrice || 0;
-  const priceAfterCartDiscounts = cart.totalPriceAfterDiscount || cart.totalCartPrice || 0;
-  const cartDiscountValue = originalCartPrice - priceAfterCartDiscounts;
-  
-  let totalPrice = priceAfterCartDiscounts;
-  let discountValue = cartDiscountValue; // ✅ البداية بخصم السلة اللي جاي من الكارت
+  let totalPrice = cart.totalPriceAfterDiscount || cart.totalCartPrice;
+  let discountValue = 0;
   let shippingPrice = 0;
   let selectedShippingType = null;
   let couponMessage = "";
 
   // 1. Calculate Shipping
   const shipping = await Shipping.findOne({ city });
-  if (shipping && shipping.shippingTypes && shipping.shippingTypes.length > 0) {
-    // ✅ محاولة إيجاد نوع الشحن المطلوب
-    selectedShippingType = shipping.shippingTypes.find(t => t.type === shippingTypeId && t.isActive);
-    
-    // ✅ لو مش موجود، استخدم أول نوع شحن متاح
-    if (!selectedShippingType) {
-      selectedShippingType = shipping.shippingTypes.find(t => t.isActive) || shipping.shippingTypes[0];
-      console.log(`⚠️ Shipping type "${shippingTypeId}" not found for city "${city}". Using "${selectedShippingType?.type}" instead.`);
-    }
-    
+  if (shipping && shipping.shippingTypes) {
+    selectedShippingType = shipping.shippingTypes.find(t => t.type === shippingTypeId);
     if (selectedShippingType) {
-      shippingPrice = selectedShippingType.cost || 0;
+      shippingPrice = selectedShippingType.cost;
     }
   }
 
@@ -44,7 +30,7 @@ const calculateOrderTotals = async (cart, couponCode, user, city, shippingTypeId
     shippingPrice = 0;
   }
 
-  // 2. Apply Coupon (إضافي على خصم السلة)
+  // 2. Apply Coupon
   if (couponCode) {
     const coupon = await Offer.findOne({
       couponCode: couponCode,
@@ -77,15 +63,15 @@ const calculateOrderTotals = async (cart, couponCode, user, city, shippingTypeId
     if (couponDiscount > totalPrice) couponDiscount = totalPrice;
     
     totalPrice -= couponDiscount;
-    discountValue += couponDiscount; // ✅ إضافة خصم الكوبون على خصم السلة
+    discountValue += couponDiscount;
     couponMessage = "Coupon applied successfully";
   }
 
   const totalOrderPrice = totalPrice + shippingPrice;
 
   return {
-    totalPrice: originalCartPrice, // ✅ السعر الأصلي قبل أي خصم
-    discountValue, // ✅ مجموع كل الخصومات
+    totalPrice: cart.totalPriceAfterDiscount || cart.totalCartPrice,
+    discountValue,
     shippingPrice,
     totalOrderPrice,
     selectedShippingType,
@@ -132,16 +118,20 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
   // ✅ Calculate estimated delivery date
   let estimatedDelivery = new Date();
   let shippingTypeInfo = {
-    _id: totals.selectedShippingType?._id || null,
-    type: totals.selectedShippingType?.type || shippingTypeId,
-    name: totals.selectedShippingType?.name || 'شحن عادي',
-    deliveryTime: totals.selectedShippingType?.deliveryTime || '2-3 أيام',
-    cost: totals.shippingPrice,
+    type: shippingTypeId,
+    name: 'شحن عادي',
+    deliveryTime: '2-3 أيام',
     selectedAt: new Date()
   };
 
   if (totals.selectedShippingType) {
-    estimatedDelivery.setHours(estimatedDelivery.getHours() + (totals.selectedShippingType.deliveryHours || 48));
+    shippingTypeInfo = {
+      type: totals.selectedShippingType.type,
+      name: totals.selectedShippingType.name,
+      deliveryTime: totals.selectedShippingType.deliveryTime,
+      selectedAt: new Date()
+    };
+    estimatedDelivery.setHours(estimatedDelivery.getHours() + totals.selectedShippingType.deliveryHours);
   } else {
     estimatedDelivery.setHours(estimatedDelivery.getHours() + 48);
   }
@@ -291,6 +281,7 @@ exports.getOrder = asyncHandler(async (req, res, next) => {
         await order.save();
         
         // إرسال إشعار (في الخلفية عشان ما نعطلش الرد)
+        const { sendNotification } = require("../utils/sendNotifications");
         sendNotification(
           order.user._id,
           'تم الدفع بنجاح ✅',
@@ -329,6 +320,7 @@ exports.updateOrderStatus = asyncHandler(async (req, res, next) => {
   order.status = status;
   await order.save();
 
+  const { sendNotification } = require("../utils/sendNotifications");
   await sendNotification(
     order.user._id,
     "تم تحديث حالة الطلب",
@@ -354,6 +346,7 @@ exports.cancelOrder = asyncHandler(async (req, res, next) => {
   order.status = "cancelled_by_user";
   await order.save();
 
+  const { sendNotification } = require("../utils/sendNotifications");
   await sendNotification(
     req.user._id,
     "تم إلغاء الطلب",
