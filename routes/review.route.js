@@ -6,6 +6,7 @@ const Auth = require('../controllers/auth.controller');
 
 // ➕ إضافة تقييم لمنتج
 router.post('/', Auth.protect, Auth.allowedTo("user"), createRatingValidator, reviewController.addProductRating);
+router.get('/', Auth.protect, Auth.allowedTo("admin"), reviewController.getAllReviews);
 
 // 📄 جلب كل التقييمات لمنتج معين
 router.get('/:productId',  reviewController.getProductRatings);

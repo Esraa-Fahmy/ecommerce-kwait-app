@@ -104,3 +104,23 @@ exports.deleteReview = asyncHandler(async (req, res, next) => {
     message: 'Review deleted successfully',
   });
 });
+
+
+exports.getAllReviews = asyncHandler(async (req, res, next) => {
+  const reviews = await Review.find()
+    .populate({
+      path: 'user',
+      select: 'firstName lastName profileImg phone',
+    })
+    .populate({
+      path: 'product',
+      select: 'title code _id', // ✅ اسم المنتج، كود المنتج، والـ ID
+    })
+    .sort('-createdAt'); // ✅ الأحدث أولاً
+
+  res.status(200).json({
+    status: 'success',
+    results: reviews.length,
+    data: reviews,
+  });
+});
