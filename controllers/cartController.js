@@ -167,7 +167,9 @@ const recalcCartTotals = async (cart) => {
 
   let cartDiscountValue = 0;
   let hasFreeShipping = false;
-  let appliedOffers = []; // ✅ Array لجميع العروض
+  let appliedOffers = []; // ✅ Array لجميع العروض المطبقة
+  let bestCartDiscount = null;
+  let bestFreeShipping = null;
 
   if (cartOffers.length > 0) {
     for (const offer of cartOffers) {
@@ -176,16 +178,20 @@ const recalcCartTotals = async (cart) => {
         // التحقق من الحد الأدنى لقيمة السلة
         if (!offer.minCartValue || totalAfterProductOffers >= offer.minCartValue) {
           if (offer.discountValue) {
-            cartDiscountValue = totalAfterProductOffers * (offer.discountValue / 100);
-            // ✅ إضافة العرض للـ array
-            appliedOffers.push({
-              _id: offer._id,
-              title: offer.title,
-              offerType: offer.offerType,
-              discountValue: offer.discountValue,
-              discountAmount: cartDiscountValue,
-              minCartValue: offer.minCartValue || 0
-            });
+            const discountAmount = totalAfterProductOffers * (offer.discountValue / 100);
+            
+            // ✅ اختيار أعلى خصم فقط
+            if (!bestCartDiscount || discountAmount > cartDiscountValue) {
+              cartDiscountValue = discountAmount;
+              bestCartDiscount = {
+                _id: offer._id,
+                title: offer.title,
+                offerType: offer.offerType,
+                discountValue: offer.discountValue,
+                discountAmount: cartDiscountValue,
+                minCartValue: offer.minCartValue || 0
+              };
+            }
           }
         }
       }
@@ -193,16 +199,27 @@ const recalcCartTotals = async (cart) => {
       else if (offer.offerType === "freeShipping") {
         if (!offer.minCartValue || totalAfterProductOffers >= offer.minCartValue) {
           hasFreeShipping = true;
-          // ✅ إضافة العرض للـ array
-          appliedOffers.push({
-            _id: offer._id,
-            title: offer.title,
-            offerType: offer.offerType,
-            minCartValue: offer.minCartValue || 0
-          });
+          
+          // ✅ اختيار أول عرض شحن مجاني ينطبق (حسب الأولوية)
+          if (!bestFreeShipping) {
+            bestFreeShipping = {
+              _id: offer._id,
+              title: offer.title,
+              offerType: offer.offerType,
+              minCartValue: offer.minCartValue || 0
+            };
+          }
         }
       }
     }
+  }
+
+  // ✅ إضافة العروض المطبقة فقط
+  if (bestCartDiscount) {
+    appliedOffers.push(bestCartDiscount);
+  }
+  if (bestFreeShipping) {
+    appliedOffers.push(bestFreeShipping);
   }
 
   // تطبيق خصم السلة على الإجمالي
