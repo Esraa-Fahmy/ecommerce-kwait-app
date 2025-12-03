@@ -1,5 +1,6 @@
 const { check } = require("express-validator");
 const validatorMiddleware = require("../middlewares/validatorMiddleware");
+const Category = require("../models/category.model");
 
 exports.getSubCategoryValidator = [
   check("id").isMongoId().withMessage("Invalid subCategory id format"),
@@ -14,7 +15,16 @@ exports.createSubCategoryValidation = [
     .withMessage("very short subCategory name")
     .isLength({ max: 40 })
     .withMessage(" very long subCategory name"),
-  check("category").isMongoId().withMessage("invalid category id format"),
+  check("category")
+    .isMongoId()
+    .withMessage("invalid category id format")
+    .custom(async (categoryId) => {
+      const category = await Category.findById(categoryId);
+      if (!category) {
+        throw new Error(`No category found with id: ${categoryId}. Please create a category first.`);
+      }
+      return true;
+    }),
   validatorMiddleware,
 ];
 
