@@ -232,17 +232,46 @@ exports.checkPaymentStatus = asyncHandler(async (req, res, next) => {
 
 // ✅ Callback - Success (App Links)
 exports.paymentSuccess = asyncHandler(async (req, res, next) => {
-  const { paymentId } = req.query;
+  const { paymentId, orderId } = req.query;
 
-  console.log('🔔 Payment Success Callback - Start', { paymentId });
+  console.log('🔔 Payment Success Callback - Start', { paymentId, orderId });
 
+  // ✅ KNET لا يرسل paymentId، لذلك نعرض رسالة نجاح ونعتمد على الـ webhook
   if (!paymentId) {
-    console.error('❌ Payment Success Callback - Missing paymentId');
-    return res.redirect(`/payment-error?message=${encodeURIComponent('Payment ID is required')}`);
+    console.log('ℹ️ No paymentId (likely KNET payment) - showing success message, webhook will handle confirmation');
+    
+    const html = `
+      <!DOCTYPE html>
+      <html lang="ar" dir="rtl">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Payment Successful</title>
+          <style>
+              body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+              .container { background: white; padding: 40px; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 400px; }
+              h1 { color: #4CAF50; margin-bottom: 20px; }
+              p { color: #666; margin-bottom: 30px; }
+              .icon { font-size: 80px; margin-bottom: 20px; }
+          </style>
+      </head>
+      <body>
+          <div class="container">
+              <div class="icon">✅</div>
+              <h1>تم الدفع بنجاح!</h1>
+              <p>تمت معالجة الدفع بنجاح. جاري تأكيد الطلب...</p>
+              <p style="font-size: 14px; color: #999;">سيتم تحديث حالة طلبك خلال لحظات</p>
+              ${orderId ? `<p style="font-size: 12px; color: #999;">Order ID: ${orderId}</p>` : ''}
+          </div>
+      </body>
+      </html>
+    `;
+    
+    return res.send(html);
   }
 
   try {
-    // ✅ Step 1: التحقق من حالة الدفع من MyFatoorah
+    // ✅ Step 1: التحقق من حالة الدفع من MyFatoorah (للدفع بالفيزا/ماستركارد)
     console.log('📡 Fetching payment status from MyFatoorah...');
     const paymentStatus = await myFatoorah.getPaymentStatus(paymentId, 'PaymentId');
 
@@ -256,99 +285,7 @@ exports.paymentSuccess = asyncHandler(async (req, res, next) => {
       orderId: paymentStatus.reference 
     });
 
-    // ✅ Step 2: البحث عن الطلب
-    console.log('🔍 Finding order...', { orderId: paymentStatus.reference });
-    const order = await Order.findById(paymentStatus.reference)
-      .populate('cart')
-      .populate('user', 'firstName lastName email phone');
-
-    if (!order) {
-      console.error('❌ Order not found', { orderId: paymentStatus.reference });
-      return res.redirect(`/payment-error?message=${encodeURIComponent('Order not found')}`);
-    }
-
-    console.log('✅ Order found', { 
-      orderId: order._id, 
-      currentStatus: order.status,
-      paymentStatus: order.paymentDetails?.status 
-    });
-
-    // ✅ Step 3: معالجة الطلب في الـ background
-    // استخدام setImmediate لتنفيذ الكود بشكل غير متزامن
-    setImmediate(async () => {
-      try {
-        if (order.paymentDetails.status !== 'paid') {
-          console.log('🔄 Processing payment confirmation in background...');
-
-          // تحديث حالة الطلب
-          order.status = 'confirmed';
-          order.paymentDetails.status = 'paid';
-          order.paymentDetails.transactionId = paymentStatus.transactionId;
-          order.paymentDetails.paymentMethod = paymentStatus.paymentMethod;
-          order.paymentDetails.paidAt = new Date();
-          
-          console.log('✅ Order status updated to confirmed');
-
-          // ✅ خصم الكميات من المنتجات
-          console.log('📦 Deducting inventory...');
-          for (const item of order.cartItems) {
-            try {
-              await Product.findByIdAndUpdate(item.product, {
-                $inc: { quantity: -item.quantity, sold: item.quantity },
-              });
-              console.log(`✅ Inventory updated for product ${item.product}`, {
-                quantity: item.quantity
-              });
-            } catch (error) {
-              console.error(`❌ Failed to update inventory for product ${item.product}`, error);
-            }
-          }
-
-          // ✅ حذف الـ Cart
-          if (order.cart) {
-            try {
-              console.log('🗑️ Deleting cart...', { cartId: order.cart._id || order.cart });
-              await Cart.findByIdAndDelete(order.cart._id || order.cart);
-              console.log('✅ Cart deleted successfully');
-            } catch (error) {
-              console.error('❌ Failed to delete cart', error);
-            }
-          }
-
-          // ✅ حفظ التغييرات
-          console.log('💾 Saving order...');
-          await order.save();
-          console.log('✅ Order saved successfully');
-
-          // ✅ إرسال الإشعار
-          try {
-            const { sendNotification } = require("../utils/sendNotifications");
-            console.log('🔔 Sending notification...');
-            await sendNotification(
-              order.user._id,
-              'تم الدفع بنجاح ✅',
-              `تم تأكيد دفع طلبك رقم ${order._id} بنجاح. إجمالي المبلغ: ${order.total} د.ك`,
-              'order'
-            );
-            console.log('✅ Notification sent successfully');
-          } catch (error) {
-            console.error('❌ Failed to send notification', error);
-          }
-
-          console.log('🎉 Background payment processing completed successfully!');
-        } else {
-          console.log('ℹ️ Order already marked as paid, skipping background processing');
-        }
-      } catch (bgError) {
-        console.error('❌ Background processing error:', bgError);
-      }
-    });
-
-    // ✅ Step 4: انتظار قصير (2 ثانية) لضمان بدء المعالجة قبل فتح التطبيق
-    console.log('⏳ Waiting 10 seconds before sending response...');
-    await new Promise(resolve => setTimeout(resolve, 10000));
-
-    // ✅ Step 5: إرسال HTML Response
+    // ✅ Step 2: عرض رسالة النجاح (الـ webhook سيتولى تحديث الطلب)
     const html = `
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
@@ -369,15 +306,14 @@ exports.paymentSuccess = asyncHandler(async (req, res, next) => {
               <div class="icon">✅</div>
               <h1>تم الدفع بنجاح!</h1>
               <p>تمت معالجة الدفع بنجاح. سيتم فتح التطبيق تلقائياً...</p>
-              <p style="font-size: 12px; color: #999;">Order ID: ${order._id}</p>
+              <p style="font-size: 12px; color: #999;">Order ID: ${paymentStatus.reference}</p>
           </div>
       </body>
       </html>
     `;
     
-    console.log('📄 Sending HTML response...');
+    console.log('📄 Sending HTML response (webhook will handle order confirmation)...');
     res.send(html);
-
 
   } catch (error) {
     console.error('❌ Payment Success Callback - Unexpected Error:', error);
