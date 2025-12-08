@@ -346,7 +346,7 @@ exports.paymentSuccess = asyncHandler(async (req, res, next) => {
 
     // ✅ Step 4: انتظار قصير (2 ثانية) لضمان بدء المعالجة قبل فتح التطبيق
     console.log('⏳ Waiting 2 seconds before sending response...');
-    await new Promise(resolve => setTimeout(resolve, 10000));
+    await new Promise(resolve => setTimeout(resolve, 15000));
 
     // ✅ Step 5: إرسال HTML Response
     const html = `
