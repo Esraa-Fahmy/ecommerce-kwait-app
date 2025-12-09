@@ -3,8 +3,8 @@ const crypto = require('crypto');
 
 const MYFATOORAH_API_KEY = process.env.MYFATOORAH_API_KEY;
 const MYFATOORAH_BASE_URL = process.env.MYFATOORAH_BASE_URL || 'https://apitest.myfatoorah.com';
-const SUCCESS_URL = process.env.MYFATOORAH_SUCCESS_URL || 'https://3roood.com/payment-success';
-const ERROR_URL = process.env.MYFATOORAH_ERROR_URL || 'https://3roood.com/payment-failed';
+const SUCCESS_URL = process.env.MYFATOORAH_SUCCESS_URL || 'https://3roood.com/api/v1/payment-success';
+const ERROR_URL = process.env.MYFATOORAH_ERROR_URL || 'https://3roood.com/api/v1/payment-failed';
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 
 // ✅ Axios instance with default config
