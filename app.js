@@ -3,7 +3,7 @@ const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
 const compression = require("compression");
-const http = require("http");
+const http = require("http"); // لإنشاء السيرفر
 const { Server } = require("socket.io");
 
 dotenv.config({ path: "config.env" });
@@ -14,28 +14,28 @@ const { initNotificationSystem } = require("./utils/sendNotifications");
 dbConnection();
 
 const app = express();
-
 // ✅ IMPORTANT: Webhook route must use express.raw() for signature verification
 app.use('/api/v1/payment/webhook', express.raw({ type: 'application/json' }));
-
-// Regular middleware for other routes
+// Middleware
 app.use(compression());
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 app.use(express.static(path.join(__dirname, "uploads")));
+// Serve payment redirect pages from public directory
 app.use(express.static(path.join(__dirname, "public")));
 
-// ✅ Serve assetlinks.json for Android App Links
+// ✅ Serve assetlinks.json for Android App Links verification
 app.get('/.well-known/assetlinks.json', (req, res) => {
   const fs = require('fs');
   const filePath = path.join(__dirname, 'public', '.well-known', 'assetlinks.json');
   
+  // Check if file exists
   if (fs.existsSync(filePath)) {
     res.setHeader('Content-Type', 'application/json');
     const content = fs.readFileSync(filePath, 'utf8');
     res.send(content);
   } else {
-    res.status(404).json({ error: 'assetlinks.json not found' });
+    res.status(404).json({ error: 'assetlinks.json not found', path: filePath });
   }
 });
 
@@ -43,15 +43,6 @@ app.get('/.well-known/assetlinks.json', (req, res) => {
 const { paymentSuccess, paymentError } = require("./controllers/paymentController");
 app.get('/payment-success', paymentSuccess);
 app.get('/payment-failed', paymentError);
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
-  });
-});
 
 // Mount Routes
 app.use("/api/v1/categories", require("./routes/category.route"));
@@ -70,18 +61,10 @@ app.use("/api/v1/addresses", require("./routes/addressRoute"));
 app.use("/api/v1/notifications", require("./routes/notificationRoute"));
 app.use("/api/v1/payment", require("./routes/paymentRoute"));
 
-// 404 handler
-app.all('*', (req, res) => {
-  res.status(404).json({
-    status: 'error',
-    message: `Can't find ${req.originalUrl} on this server`
-  });
-});
-
 // Global Error Handler
 app.use(globalError);
 
-// ⚙️ Create HTTP Server
+// ⚙️ إنشاء السيرفر
 const PORT = process.env.PORT || 8080;
 const server = http.createServer(app);
 
@@ -90,69 +73,35 @@ const server = http.createServer(app);
 // ============================
 const io = new Server(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
+    origin: "*", // ممكن تحطي الدومين بتاعك
   },
-  pingTimeout: 60000,
-  pingInterval: 25000
 });
 
-// Map to store connected users
+// Map للاحتفاظ بالمستخدمين المتصلين
 const connectedUsers = new Map();
 
 io.on("connection", (socket) => {
-  console.log("✅ User connected:", socket.id);
+  console.log("✅ مستخدم متصل:", socket.id);
 
-  // Register user
+  // تسجيل المستخدم عند الـ login/connection
   socket.on("register", (userId) => {
     connectedUsers.set(userId, socket.id);
-    console.log(`📡 User ${userId} registered in socket`);
+    console.log(`📡 المستخدم ${userId} سجل في سوكيت`);
   });
 
-  // Disconnect
+  // عند فصل الاتصال
   socket.on("disconnect", () => {
     for (const [userId, id] of connectedUsers.entries()) {
-      if (id === socket.id) {
-        connectedUsers.delete(userId);
-        console.log(`❌ User ${userId} disconnected`);
-      }
+      if (id === socket.id) connectedUsers.delete(userId);
     }
+    console.log("❌ مستخدم فصل الاتصال:", socket.id);
   });
 });
 
-// Initialize notification system
+// تهيئة نظام الإشعارات
 initNotificationSystem(io, connectedUsers);
 
-// ============================
-// Graceful Shutdown
-// ============================
-process.on('SIGTERM', () => {
-  console.log('👋 SIGTERM received, closing server gracefully');
-  server.close(() => {
-    console.log('💤 Server closed');
-    process.exit(0);
-  });
-});
-
-process.on('SIGINT', () => {
-  console.log('👋 SIGINT received, closing server gracefully');
-  server.close(() => {
-    console.log('💤 Server closed');
-    process.exit(0);
-  });
-});
-
-// Unhandled rejection handler
-process.on('unhandledRejection', (err) => {
-  console.error('❌ Unhandled Rejection:', err.name, err.message);
-  server.close(() => {
-    process.exit(1);
-  });
-});
-
-// Start server
+// تشغيل السيرفر
 server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`📡 Socket.io enabled`);
+  console.log(`Server running on port ${PORT}`);
 });
