@@ -41,8 +41,8 @@ app.get('/.well-known/assetlinks.json', (req, res) => {
 
 // ✅ App Links Routes (must be before /api/v1/payment)
 const { paymentSuccess, paymentError } = require("./controllers/paymentController");
-app.get('/payment-success', paymentSuccess);
-app.get('/payment-failed', paymentError);
+app.get('/api/v1/payment-success', paymentSuccess);
+app.get('/api/v1/payment-failed', paymentError);
 
 // Mount Routes
 app.use("/api/v1/categories", require("./routes/category.route"));
