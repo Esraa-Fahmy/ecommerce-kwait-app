@@ -1,34 +1,52 @@
-// routes/payment.route.js
+
+// routes/paymentRoute.js
 const express = require('express');
 const router = express.Router();
 const { protect, allowedTo } = require('../controllers/auth.controller');
 const {
   initiatePayment,
   checkPaymentStatus,
-  paymentSuccess,
-  paymentError,
   paymentWebhook,
   refundPayment,
   getPaymentMethods,
 } = require('../controllers/paymentController');
-const { initiatePaymentValidator, refundPaymentValidator } = require('../validators/payment');
+const { 
+  initiatePaymentValidator, 
+  refundPaymentValidator 
+} = require('../validators/payment');
 
-router.get('/methods', protect, allowedTo("user"), getPaymentMethods);
-
-// 💳 بدء الدفع (User فقط)
-router.post('/initiate', protect, allowedTo("user"), initiatePaymentValidator, initiatePayment);
-
-// ✅ التحقق من حالة الدفع (للـ Flutter app)
-router.get('/check-status/:invoiceId', protect, allowedTo("user"), checkPaymentStatus);
-
-// ✅ Success & Error Callbacks
-router.get('/success', paymentSuccess);
-router.get('/error', paymentError);
-
-// 🔔 Webhook من MyFatoorah
+// ✅ Public routes first (no auth)
+// 🔔 Webhook من MyFatoorah (MUST be before auth middleware)
 router.post('/webhook', paymentWebhook);
 
-// 🔄 Refund (Admin فقط)
-router.post('/refund', protect, allowedTo('admin'), refundPaymentValidator, refundPayment);
+// ✅ Protected routes (require auth)
+// 📋 Get available payment methods
+router.get('/methods', protect, allowedTo("user"), getPaymentMethods);
+
+// 💳 Initiate payment
+router.post(
+  '/initiate', 
+  protect, 
+  allowedTo("user"), 
+  initiatePaymentValidator, 
+  initiatePayment
+);
+
+// ✅ Check payment status (Polling endpoint)
+router.get(
+  '/check-status/:invoiceId', 
+  protect, 
+  allowedTo("user"), 
+  checkPaymentStatus
+);
+
+// 🔄 Refund (Admin only)
+router.post(
+  '/refund', 
+  protect, 
+  allowedTo('admin'), 
+  refundPaymentValidator, 
+  refundPayment
+);
 
 module.exports = router;
