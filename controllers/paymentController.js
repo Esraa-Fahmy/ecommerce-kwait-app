@@ -385,7 +385,7 @@ exports.paymentSuccess = asyncHandler(async (req, res, next) => {
             <div class="shimmer"></div>
             
             <div class="logo">
-                <img src="/logo_temp2.svg" alt="Logo" onerror="this.style.display='none'">
+                <img src="/logo.png" alt="Logo" onerror="this.style.display='none'">
             </div>
 
             <div class="icon-wrapper">
@@ -403,8 +403,6 @@ exports.paymentSuccess = asyncHandler(async (req, res, next) => {
                     <span class="value">#${paymentId}</span>
                 </div>
             </div>
-
-            <a href="javascript:void(0)" class="btn">العودة للتطبيق</a>
         </div>
     </body>
     </html>
@@ -644,7 +642,7 @@ exports.paymentError = asyncHandler(async (req, res, next) => {
         
         <div class="card">
             <div class="logo">
-                <img src="/logo_temp2.svg" alt="Logo" onerror="this.style.display='none'">
+                <img src="/logo.png" alt="Logo" onerror="this.style.display='none'">
             </div>
 
             <div class="icon-wrapper">
@@ -657,9 +655,7 @@ exports.paymentError = asyncHandler(async (req, res, next) => {
             <h1>فشل الدفع</h1>
             <p>عذراً، لم نتمكن من إتمام عملية الدفع. يرجى التحقق من بياناتك والمحاولة مرة أخرى.</p>
 
-            <div class="error-box">${errorMessage}</div>
 
-            <a href="javascript:void(0)" onclick="window.location.reload()" class="btn">إعادة المحاولة</a>
         </div>
         <script>
           setTimeout(function() {
