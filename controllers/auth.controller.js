@@ -34,15 +34,31 @@ exports.login = asyncHandler(async (req, res, next) => {
     return next(new ApiError("Incorrect email or password", 401));
   }
 
+  // إخفاء كلمة المرور
   user.password = undefined;
+  
+  // إنشاء التوكن
   const token = createToken(user._id);
 
   // 🧠 نجلب الـ wishlist والـ cart
   const wishlist = user.wishlist || [];
   const cart = await cartModel.findOne({ user: user._id });
 
+  // إرجاع البيانات مع صورة المستخدم
   res.status(200).json({
-    data: user,
+    data: {
+      _id: user._id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      phone: user.phone,
+      profileImg: user.profileImg, // ✅ صورة المستخدم
+      role: user.role,
+      wishlist: user.wishlist,
+      addresses: user.addresses,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    },
     token,
     wishlistCount: wishlist.length,
     cartCount: cart ? cart.cartItems.length : 0,

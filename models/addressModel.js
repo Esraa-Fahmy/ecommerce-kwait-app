@@ -9,7 +9,7 @@ const addressSchema = new mongoose.Schema({
   building: String,
   floor: String,
   apartment: String,
-  notes: String,
+  notes: { type: String, required: true },
   phone: String,
 }, { timestamps: true });
 
