@@ -23,6 +23,8 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.static(path.join(__dirname, "uploads")));
 // Serve payment redirect pages from public directory
 app.use(express.static(path.join(__dirname, "public")));
+// Serve logo and other root files
+app.use(express.static(__dirname));
 
 // ✅ Serve assetlinks.json for Android App Links verification
 app.get('/.well-known/assetlinks.json', (req, res) => {

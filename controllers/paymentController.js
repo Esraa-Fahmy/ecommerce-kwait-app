@@ -177,7 +177,7 @@ exports.checkPaymentStatus = asyncHandler(async (req, res, next) => {
   });
 });
 
-// ✅ Success Callback - SIMPLIFIED (لا تنتظر، فقط redirect فوراً)
+// ✅ Success Callback - iOS 26 Style
 exports.paymentSuccess = asyncHandler(async (req, res, next) => {
   const { paymentId } = req.query;
 
@@ -188,337 +188,223 @@ exports.paymentSuccess = asyncHandler(async (req, res, next) => {
     return res.redirect(`/payment-failed?message=${encodeURIComponent('Payment ID is required')}`);
   }
 
-  // ✅ رد HTML فوراً بدون انتظار
   const html = `
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>تم الدفع بنجاح - عروض</title>
-        
-        <!-- Google Fonts - Cairo for Arabic -->
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <title>تم الدفع بنجاح</title>
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
-        
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&display=swap" rel="stylesheet">
         <style>
-            /* ============================================
-               CSS VARIABLES - Easy theme customization
-               ============================================ */
             :root {
-              /* Success Colors */
-              --success-primary: #10b981;
-              --success-light: #34d399;
-              --success-dark: #059669;
-              
-              /* Background Gradient */
-              --bg-gradient-start: #0f766e;
-              --bg-gradient-end: #10b981;
-              
-              /* Glassmorphism */
-              --glass-bg: rgba(255, 255, 255, 0.95);
-              --glass-border: rgba(255, 255, 255, 0.3);
-              --glass-shadow: rgba(0, 0, 0, 0.1);
-              
-              /* Text Colors */
-              --text-primary: #1f2937;
-              --text-secondary: #6b7280;
-              --text-muted: #9ca3af;
-              
-              /* Spacing */
-              --spacing-xs: 8px;
-              --spacing-sm: 16px;
-              --spacing-md: 24px;
-              --spacing-lg: 32px;
-              --spacing-xl: 48px;
+                --primary: #34C759;
+                --surface: rgba(255, 255, 255, 0.65);
+                --surface-dark: rgba(0, 0, 0, 0.05);
+                --blur: 25px;
+                --text: #000000;
+                --text-secondary: #3C3C4399;
             }
-            
-            /* ============================================
-               RESET & BASE STYLES
-               ============================================ */
-            * {
-              margin: 0;
-              padding: 0;
-              box-sizing: border-box;
+
+            * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+            body {
+                font-family: 'Cairo', -apple-system, BlinkMacSystemFont, sans-serif;
+                background: #F2F2F7;
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow: hidden;
+                position: relative;
             }
-            
-            body { 
-              font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif;
-              text-align: center; 
-              background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
-              min-height: 100vh; 
-              display: flex; 
-              align-items: center; 
-              justify-content: center;
-              padding: var(--spacing-md);
-              position: relative;
-              overflow: hidden;
+
+            /* Mesh Gradient Background */
+            .mesh-bg {
+                position: absolute;
+                top: 0; left: 0; right: 0; bottom: 0;
+                background: 
+                    radial-gradient(at 0% 0%, hsla(135,70%,85%,1) 0, transparent 50%),
+                    radial-gradient(at 100% 0%, hsla(150,70%,88%,1) 0, transparent 50%),
+                    radial-gradient(at 100% 100%, hsla(135,70%,85%,1) 0, transparent 50%),
+                    radial-gradient(at 0% 100%, hsla(150,70%,88%,1) 0, transparent 50%);
+                filter: blur(60px);
+                z-index: -1;
+                animation: breathe 10s ease-in-out infinite alternate;
             }
-            
-            /* Animated background particles */
-            body::before {
-              content: '';
-              position: absolute;
-              width: 200%;
-              height: 200%;
-              background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
-              background-size: 50px 50px;
-              animation: moveBackground 20s linear infinite;
-              opacity: 0.3;
+
+            @keyframes breathe {
+                0% { transform: scale(1); opacity: 0.8; }
+                100% { transform: scale(1.1); opacity: 1; }
             }
-            
-            @keyframes moveBackground {
-              0% { transform: translate(0, 0); }
-              100% { transform: translate(50px, 50px); }
+
+            .card {
+                background: var(--surface);
+                backdrop-filter: blur(var(--blur));
+                -webkit-backdrop-filter: blur(var(--blur));
+                border-radius: 32px;
+                padding: 48px 32px;
+                width: 90%;
+                max-width: 400px;
+                text-align: center;
+                box-shadow: 
+                    0 20px 40px rgba(0,0,0,0.05),
+                    0 1px 0 rgba(255,255,255,0.5) inset;
+                transform: translateY(20px);
+                opacity: 0;
+                animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+                position: relative;
+                overflow: hidden;
             }
-            
-            /* ============================================
-               GLASSMORPHISM CONTAINER
-               ============================================ */
-            .container { 
-              background: var(--glass-bg);
-              backdrop-filter: blur(20px);
-              -webkit-backdrop-filter: blur(20px);
-              padding: var(--spacing-xl);
-              border-radius: 24px;
-              border: 1px solid var(--glass-border);
-              box-shadow: 
-                0 8px 32px var(--glass-shadow),
-                0 0 0 1px rgba(255, 255, 255, 0.1) inset;
-              max-width: 480px;
-              width: 100%;
-              position: relative;
-              z-index: 1;
-              animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-            }
-            
+
             @keyframes slideUp {
-              from { 
-                opacity: 0;
-                transform: translateY(30px);
-              }
-              to { 
-                opacity: 1;
-                transform: translateY(0);
-              }
+                to { transform: translateY(0); opacity: 1; }
             }
-            
-            /* ============================================
-               LOGO STYLING
-               ============================================ */
+
             .logo {
-              width: 80px;
-              height: 80px;
-              margin: 0 auto var(--spacing-md);
-              animation: fadeIn 0.8s ease-out 0.2s both;
-            }
-            
-            .logo img {
-              width: 100%;
-              height: 100%;
-              object-fit: contain;
-              filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
-            }
-            
-            /* ============================================
-               SUCCESS ICON WITH ANIMATION
-               ============================================ */
-            .success-icon { 
-              width: 100px;
-              height: 100px;
-              margin: 0 auto var(--spacing-md);
-              background: linear-gradient(135deg, var(--success-light), var(--success-primary));
-              border-radius: 50%;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              box-shadow: 
-                0 10px 30px rgba(16, 185, 129, 0.3),
-                0 0 0 10px rgba(16, 185, 129, 0.1);
-              animation: successPop 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) 0.3s both;
-              position: relative;
-            }
-            
-            .success-icon::before {
-              content: '';
-              position: absolute;
-              width: 100%;
-              height: 100%;
-              border-radius: 50%;
-              background: inherit;
-              animation: pulse 2s ease-out infinite;
-            }
-            
-            .success-icon svg {
-              width: 50px;
-              height: 50px;
-              stroke: white;
-              stroke-width: 3;
-              fill: none;
-              stroke-linecap: round;
-              stroke-linejoin: round;
-              position: relative;
-              z-index: 1;
-            }
-            
-            .checkmark {
-              stroke-dasharray: 100;
-              stroke-dashoffset: 100;
-              animation: drawCheck 0.8s ease-out 0.5s forwards;
-            }
-            
-            @keyframes successPop {
-              0% { 
-                transform: scale(0);
-                opacity: 0;
-              }
-              50% {
-                transform: scale(1.1);
-              }
-              100% { 
-                transform: scale(1);
-                opacity: 1;
-              }
-            }
-            
-            @keyframes drawCheck {
-              to {
-                stroke-dashoffset: 0;
-              }
-            }
-            
-            @keyframes pulse {
-              0%, 100% {
-                opacity: 0;
-                transform: scale(1);
-              }
-              50% {
-                opacity: 0.3;
-                transform: scale(1.3);
-              }
-            }
-            
-            /* ============================================
-               TYPOGRAPHY
-               ============================================ */
-            h1 { 
-              color: var(--success-primary);
-              margin-bottom: var(--spacing-sm);
-              font-size: clamp(24px, 5vw, 32px);
-              font-weight: 700;
-              animation: fadeIn 0.8s ease-out 0.4s both;
-            }
-            
-            .message { 
-              color: var(--text-secondary);
-              margin-bottom: var(--spacing-md);
-              line-height: 1.8;
-              font-size: 16px;
-              font-weight: 400;
-              animation: fadeIn 0.8s ease-out 0.5s both;
-            }
-            
-            .payment-id {
-              display: inline-block;
-              background: rgba(16, 185, 129, 0.1);
-              color: var(--success-dark);
-              padding: var(--spacing-xs) var(--spacing-sm);
-              border-radius: 8px;
-              font-size: 13px;
-              font-weight: 600;
-              font-family: 'Courier New', monospace;
-              margin-top: var(--spacing-sm);
-              animation: fadeIn 0.8s ease-out 0.6s both;
-              transition: all 0.3s ease;
-            }
-            
-            .payment-id:hover {
-              background: rgba(16, 185, 129, 0.15);
-              transform: translateY(-2px);
-            }
-            
-            @keyframes fadeIn {
-              from {
-                opacity: 0;
-                transform: translateY(10px);
-              }
-              to {
-                opacity: 1;
-                transform: translateY(0);
-              }
-            }
-            
-            /* ============================================
-               DIVIDER
-               ============================================ */
-            .divider {
-              height: 1px;
-              background: linear-gradient(to right, transparent, var(--text-muted), transparent);
-              margin: var(--spacing-md) 0;
-              opacity: 0.3;
-            }
-            
-            /* ============================================
-               FOOTER NOTE
-               ============================================ */
-            .footer-note {
-              color: var(--text-muted);
-              font-size: 14px;
-              margin-top: var(--spacing-md);
-              animation: fadeIn 0.8s ease-out 0.7s both;
-            }
-            
-            /* ============================================
-               RESPONSIVE DESIGN
-               ============================================ */
-            @media (max-width: 480px) {
-              .container {
-                padding: var(--spacing-md);
-              }
-              
-              .success-icon {
                 width: 80px;
                 height: 80px;
-              }
-              
-              .success-icon svg {
-                width: 40px;
-                height: 40px;
-              }
-              
-              .logo {
-                width: 60px;
-                height: 60px;
-              }
+                margin: 0 auto 32px;
+                filter: drop-shadow(0 4px 12px rgba(0,0,0,0.08));
+                animation: float 6s ease-in-out infinite;
+            }
+
+            .logo img { width: 100%; height: 100%; object-fit: contain; }
+
+            @keyframes float {
+                0%, 100% { transform: translateY(0); }
+                50% { transform: translateY(-6px); }
+            }
+
+            .icon-wrapper {
+                width: 96px;
+                height: 96px;
+                background: linear-gradient(135deg, #34C759, #30D158);
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin: 0 auto 24px;
+                box-shadow: 
+                    0 12px 24px rgba(52, 199, 89, 0.25),
+                    0 0 0 8px rgba(52, 199, 89, 0.1);
+                animation: scaleIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s backwards;
+            }
+
+            @keyframes scaleIn {
+                from { transform: scale(0); opacity: 0; }
+                to { transform: scale(1); opacity: 1; }
+            }
+
+            .icon-wrapper svg {
+                width: 44px;
+                height: 44px;
+                stroke: white;
+                stroke-width: 3.5;
+                stroke-linecap: round;
+                stroke-linejoin: round;
+                fill: none;
+                stroke-dasharray: 100;
+                stroke-dashoffset: 100;
+                animation: draw 0.8s ease-out 0.6s forwards;
+            }
+
+            @keyframes draw { to { stroke-dashoffset: 0; } }
+
+            h1 {
+                font-size: 28px;
+                font-weight: 800;
+                color: var(--text);
+                margin-bottom: 12px;
+                letter-spacing: -0.5px;
+            }
+
+            p {
+                font-size: 17px;
+                color: var(--text-secondary);
+                line-height: 1.5;
+                margin-bottom: 32px;
+                font-weight: 400;
+            }
+
+            .details {
+                background: rgba(255,255,255,0.5);
+                border-radius: 20px;
+                padding: 16px;
+                margin-bottom: 32px;
+                border: 1px solid rgba(0,0,0,0.03);
+            }
+
+            .detail-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                font-size: 14px;
+            }
+
+            .label { color: var(--text-secondary); }
+            .value { font-weight: 600; font-family: 'SF Mono', 'Menlo', monospace; letter-spacing: -0.5px; }
+
+            .btn {
+                display: block;
+                width: 100%;
+                padding: 18px;
+                background: #000;
+                color: #fff;
+                text-decoration: none;
+                border-radius: 18px;
+                font-weight: 600;
+                font-size: 17px;
+                transition: transform 0.2s;
+                cursor: pointer;
+            }
+
+            .btn:active { transform: scale(0.96); }
+
+            /* Shimmer Effect */
+            .shimmer {
+                position: absolute;
+                top: 0; left: 0; width: 100%; height: 100%;
+                background: linear-gradient(to right, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%);
+                transform: skewX(-20deg) translateX(-150%);
+                animation: shimmer 3s infinite;
+                pointer-events: none;
+            }
+
+            @keyframes shimmer {
+                100% { transform: skewX(-20deg) translateX(150%); }
             }
         </style>
     </head>
     <body>
-        <div class="container">
-            <!-- Logo -->
-            <div class="logo">
-                <img src="/logo_temp2.svg" alt="عروض Logo">
-            </div>
+        <div class="mesh-bg"></div>
+        
+        <div class="card">
+            <div class="shimmer"></div>
             
-            <!-- Success Icon with Checkmark -->
-            <div class="success-icon">
-                <svg viewBox="0 0 52 52">
-                    <path class="checkmark" d="M14 27l7 7 16-16"/>
+            <div class="logo">
+                <img src="/logo_temp2.svg" alt="Logo" onerror="this.style.display='none'">
+            </div>
+
+            <div class="icon-wrapper">
+                <svg viewBox="0 0 24 24">
+                    <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
             </div>
-            
-            <!-- Success Message -->
-            <h1>تم الدفع بنجاح!</h1>
-            <p class="message">تمت معالجة الدفع بنجاح. يرجى العودة للتطبيق لمتابعة طلبك.</p>
-            
-            <div class="divider"></div>
-            
-            <!-- Payment ID -->
-            <div class="payment-id">Payment ID: ${paymentId}</div>
-            
-            <!-- Footer Note -->
-            <p class="footer-note">شكراً لاستخدامك تطبيق عروض 💚</p>
+
+            <h1>تم الدفع بنجاح</h1>
+            <p>شكراً لك! تم تأكيد طلبك بنجاح وسيصلك إشعار قريباً.</p>
+
+            <div class="details">
+                <div class="detail-row">
+                    <span class="label">رقم العملية</span>
+                    <span class="value">#${paymentId}</span>
+                </div>
+            </div>
+
+            <a href="javascript:void(0)" class="btn">العودة للتطبيق</a>
         </div>
     </body>
     </html>
@@ -527,12 +413,10 @@ exports.paymentSuccess = asyncHandler(async (req, res, next) => {
   console.log('📄 Sending HTML response');
   res.send(html);
 
-  // ✅ معالجة الدفع في الخلفية (بدون blocking)
+  // ✅ Background processing
   setImmediate(async () => {
     try {
-      console.log('🔄 Background processing started');
       const paymentStatus = await myFatoorah.getPaymentStatus(paymentId, 'PaymentId');
-
       if (paymentStatus.success && paymentStatus.status === 'Paid') {
         const order = await Order.findById(paymentStatus.reference)
           .populate('cart')
@@ -540,7 +424,6 @@ exports.paymentSuccess = asyncHandler(async (req, res, next) => {
 
         if (order && order.paymentDetails.status !== 'paid') {
           await processSuccessfulPayment(order, paymentStatus);
-          console.log('✅ Background processing completed');
         }
       }
     } catch (error) {
@@ -549,7 +432,7 @@ exports.paymentSuccess = asyncHandler(async (req, res, next) => {
   });
 });
 
-// ❌ Error Callback
+// ❌ Error Callback - iOS 26 Style
 exports.paymentError = asyncHandler(async (req, res, next) => {
   const { paymentId, message } = req.query;
   let errorMessage = message || 'Payment failed';
@@ -590,334 +473,202 @@ exports.paymentError = asyncHandler(async (req, res, next) => {
     <html lang="ar" dir="rtl">
     <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>فشل الدفع - عروض</title>
-        
-        <!-- Google Fonts - Cairo for Arabic -->
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <title>فشل الدفع</title>
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
-        
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&display=swap" rel="stylesheet">
         <style>
-            /* ============================================
-               CSS VARIABLES - Easy theme customization
-               ============================================ */
             :root {
-              /* Error Colors */
-              --error-primary: #ef4444;
-              --error-light: #f87171;
-              --error-dark: #dc2626;
-              
-              /* Background Gradient */
-              --bg-gradient-start: #be123c;
-              --bg-gradient-end: #f43f5e;
-              
-              /* Glassmorphism */
-              --glass-bg: rgba(255, 255, 255, 0.95);
-              --glass-border: rgba(255, 255, 255, 0.3);
-              --glass-shadow: rgba(0, 0, 0, 0.1);
-              
-              /* Text Colors */
-              --text-primary: #1f2937;
-              --text-secondary: #6b7280;
-              --text-muted: #9ca3af;
-              
-              /* Spacing */
-              --spacing-xs: 8px;
-              --spacing-sm: 16px;
-              --spacing-md: 24px;
-              --spacing-lg: 32px;
-              --spacing-xl: 48px;
+                --primary: #FF3B30;
+                --surface: rgba(255, 255, 255, 0.65);
+                --surface-dark: rgba(0, 0, 0, 0.05);
+                --blur: 25px;
+                --text: #000000;
+                --text-secondary: #3C3C4399;
             }
-            
-            /* ============================================
-               RESET & BASE STYLES
-               ============================================ */
-            * {
-              margin: 0;
-              padding: 0;
-              box-sizing: border-box;
+
+            * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+            body {
+                font-family: 'Cairo', -apple-system, BlinkMacSystemFont, sans-serif;
+                background: #F2F2F7;
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow: hidden;
+                position: relative;
             }
-            
-            body { 
-              font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif;
-              text-align: center; 
-              background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
-              min-height: 100vh; 
-              display: flex; 
-              align-items: center; 
-              justify-content: center;
-              padding: var(--spacing-md);
-              position: relative;
-              overflow: hidden;
+
+            /* Mesh Gradient Background */
+            .mesh-bg {
+                position: absolute;
+                top: 0; left: 0; right: 0; bottom: 0;
+                background: 
+                    radial-gradient(at 0% 0%, hsla(0,70%,90%,1) 0, transparent 50%),
+                    radial-gradient(at 100% 0%, hsla(10,70%,92%,1) 0, transparent 50%),
+                    radial-gradient(at 100% 100%, hsla(0,70%,90%,1) 0, transparent 50%),
+                    radial-gradient(at 0% 100%, hsla(10,70%,92%,1) 0, transparent 50%);
+                filter: blur(60px);
+                z-index: -1;
+                animation: breathe 10s ease-in-out infinite alternate;
             }
-            
-            /* Animated background particles */
-            body::before {
-              content: '';
-              position: absolute;
-              width: 200%;
-              height: 200%;
-              background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
-              background-size: 50px 50px;
-              animation: moveBackground 20s linear infinite;
-              opacity: 0.3;
+
+            @keyframes breathe {
+                0% { transform: scale(1); opacity: 0.8; }
+                100% { transform: scale(1.1); opacity: 1; }
             }
-            
-            @keyframes moveBackground {
-              0% { transform: translate(0, 0); }
-              100% { transform: translate(50px, 50px); }
+
+            .card {
+                background: var(--surface);
+                backdrop-filter: blur(var(--blur));
+                -webkit-backdrop-filter: blur(var(--blur));
+                border-radius: 32px;
+                padding: 48px 32px;
+                width: 90%;
+                max-width: 400px;
+                text-align: center;
+                box-shadow: 
+                    0 20px 40px rgba(0,0,0,0.05),
+                    0 1px 0 rgba(255,255,255,0.5) inset;
+                transform: translateY(20px);
+                opacity: 0;
+                animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+                position: relative;
+                overflow: hidden;
             }
-            
-            /* ============================================
-               GLASSMORPHISM CONTAINER
-               ============================================ */
-            .container { 
-              background: var(--glass-bg);
-              backdrop-filter: blur(20px);
-              -webkit-backdrop-filter: blur(20px);
-              padding: var(--spacing-xl);
-              border-radius: 24px;
-              border: 1px solid var(--glass-border);
-              box-shadow: 
-                0 8px 32px var(--glass-shadow),
-                0 0 0 1px rgba(255, 255, 255, 0.1) inset;
-              max-width: 480px;
-              width: 100%;
-              position: relative;
-              z-index: 1;
-              animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-            }
-            
+
             @keyframes slideUp {
-              from { 
-                opacity: 0;
-                transform: translateY(30px);
-              }
-              to { 
-                opacity: 1;
-                transform: translateY(0);
-              }
+                to { transform: translateY(0); opacity: 1; }
             }
-            
-            /* ============================================
-               LOGO STYLING
-               ============================================ */
+
             .logo {
-              width: 80px;
-              height: 80px;
-              margin: 0 auto var(--spacing-md);
-              animation: fadeIn 0.8s ease-out 0.2s both;
-            }
-            
-            .logo img {
-              width: 100%;
-              height: 100%;
-              object-fit: contain;
-              filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
-            }
-            
-            /* ============================================
-               ERROR ICON WITH ANIMATION
-               ============================================ */
-            .error-icon { 
-              width: 100px;
-              height: 100px;
-              margin: 0 auto var(--spacing-md);
-              background: linear-gradient(135deg, var(--error-light), var(--error-primary));
-              border-radius: 50%;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              box-shadow: 
-                0 10px 30px rgba(239, 68, 68, 0.3),
-                0 0 0 10px rgba(239, 68, 68, 0.1);
-              animation: errorShake 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) 0.3s both;
-              position: relative;
-            }
-            
-            .error-icon::before {
-              content: '';
-              position: absolute;
-              width: 100%;
-              height: 100%;
-              border-radius: 50%;
-              background: inherit;
-              animation: pulse 2s ease-out infinite;
-            }
-            
-            .error-icon svg {
-              width: 50px;
-              height: 50px;
-              stroke: white;
-              stroke-width: 3;
-              fill: none;
-              stroke-linecap: round;
-              stroke-linejoin: round;
-              position: relative;
-              z-index: 1;
-            }
-            
-            .x-mark {
-              stroke-dasharray: 100;
-              stroke-dashoffset: 100;
-              animation: drawX 0.8s ease-out 0.5s forwards;
-            }
-            
-            @keyframes errorShake {
-              0%, 100% { 
-                transform: scale(1) rotate(0deg);
-                opacity: 1;
-              }
-              10%, 30%, 50%, 70%, 90% {
-                transform: scale(1.05) rotate(-3deg);
-              }
-              20%, 40%, 60%, 80% {
-                transform: scale(1.05) rotate(3deg);
-              }
-            }
-            
-            @keyframes drawX {
-              to {
-                stroke-dashoffset: 0;
-              }
-            }
-            
-            @keyframes pulse {
-              0%, 100% {
-                opacity: 0;
-                transform: scale(1);
-              }
-              50% {
-                opacity: 0.3;
-                transform: scale(1.3);
-              }
-            }
-            
-            /* ============================================
-               TYPOGRAPHY
-               ============================================ */
-            h1 { 
-              color: var(--error-primary);
-              margin-bottom: var(--spacing-sm);
-              font-size: clamp(24px, 5vw, 32px);
-              font-weight: 700;
-              animation: fadeIn 0.8s ease-out 0.4s both;
-            }
-            
-            .message { 
-              color: var(--text-secondary);
-              margin-bottom: var(--spacing-md);
-              line-height: 1.8;
-              font-size: 16px;
-              font-weight: 400;
-              animation: fadeIn 0.8s ease-out 0.5s both;
-            }
-            
-            .error-message {
-              display: inline-block;
-              background: rgba(239, 68, 68, 0.1);
-              color: var(--error-dark);
-              padding: var(--spacing-sm);
-              border-radius: 12px;
-              font-size: 14px;
-              font-weight: 500;
-              margin: var(--spacing-sm) 0;
-              animation: fadeIn 0.8s ease-out 0.6s both;
-              border: 1px solid rgba(239, 68, 68, 0.2);
-            }
-            
-            @keyframes fadeIn {
-              from {
-                opacity: 0;
-                transform: translateY(10px);
-              }
-              to {
-                opacity: 1;
-                transform: translateY(0);
-              }
-            }
-            
-            /* ============================================
-               DIVIDER
-               ============================================ */
-            .divider {
-              height: 1px;
-              background: linear-gradient(to right, transparent, var(--text-muted), transparent);
-              margin: var(--spacing-md) 0;
-              opacity: 0.3;
-            }
-            
-            /* ============================================
-               RETRY NOTE
-               ============================================ */
-            .retry-note {
-              color: var(--text-muted);
-              font-size: 14px;
-              margin-top: var(--spacing-md);
-              animation: fadeIn 0.8s ease-out 0.7s both;
-            }
-            
-            /* ============================================
-               RESPONSIVE DESIGN
-               ============================================ */
-            @media (max-width: 480px) {
-              .container {
-                padding: var(--spacing-md);
-              }
-              
-              .error-icon {
                 width: 80px;
                 height: 80px;
-              }
-              
-              .error-icon svg {
-                width: 40px;
-                height: 40px;
-              }
-              
-              .logo {
-                width: 60px;
-                height: 60px;
-              }
+                margin: 0 auto 32px;
+                filter: drop-shadow(0 4px 12px rgba(0,0,0,0.08));
+                animation: float 6s ease-in-out infinite;
             }
+
+            .logo img { width: 100%; height: 100%; object-fit: contain; }
+
+            @keyframes float {
+                0%, 100% { transform: translateY(0); }
+                50% { transform: translateY(-6px); }
+            }
+
+            .icon-wrapper {
+                width: 96px;
+                height: 96px;
+                background: linear-gradient(135deg, #FF3B30, #FF453A);
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin: 0 auto 24px;
+                box-shadow: 
+                    0 12px 24px rgba(255, 59, 48, 0.25),
+                    0 0 0 8px rgba(255, 59, 48, 0.1);
+                animation: shake 0.8s cubic-bezier(0.36, 0.07, 0.19, 0.97) 0.2s backwards;
+            }
+
+            @keyframes shake {
+                10%, 90% { transform: translate3d(-1px, 0, 0); }
+                20%, 80% { transform: translate3d(2px, 0, 0); }
+                30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+                40%, 60% { transform: translate3d(4px, 0, 0); }
+            }
+
+            .icon-wrapper svg {
+                width: 44px;
+                height: 44px;
+                stroke: white;
+                stroke-width: 3.5;
+                stroke-linecap: round;
+                stroke-linejoin: round;
+                fill: none;
+                stroke-dasharray: 100;
+                stroke-dashoffset: 100;
+                animation: draw 0.8s ease-out 0.6s forwards;
+            }
+
+            @keyframes draw { to { stroke-dashoffset: 0; } }
+
+            h1 {
+                font-size: 28px;
+                font-weight: 800;
+                color: var(--text);
+                margin-bottom: 12px;
+                letter-spacing: -0.5px;
+            }
+
+            p {
+                font-size: 17px;
+                color: var(--text-secondary);
+                line-height: 1.5;
+                margin-bottom: 32px;
+                font-weight: 400;
+            }
+
+            .error-box {
+                background: rgba(255, 59, 48, 0.08);
+                border-radius: 16px;
+                padding: 16px;
+                margin-bottom: 32px;
+                border: 1px solid rgba(255, 59, 48, 0.15);
+                color: #FF3B30;
+                font-weight: 600;
+                font-size: 15px;
+            }
+
+            .btn {
+                display: block;
+                width: 100%;
+                padding: 18px;
+                background: #000;
+                color: #fff;
+                text-decoration: none;
+                border-radius: 18px;
+                font-weight: 600;
+                font-size: 17px;
+                transition: transform 0.2s;
+                cursor: pointer;
+            }
+
+            .btn:active { transform: scale(0.96); }
         </style>
     </head>
     <body>
-        <div class="container">
-            <!-- Logo -->
+        <div class="mesh-bg"></div>
+        
+        <div class="card">
             <div class="logo">
-                <img src="/logo_temp2.svg" alt="عروض Logo">
+                <img src="/logo_temp2.svg" alt="Logo" onerror="this.style.display='none'">
             </div>
-            
-            <!-- Error Icon with X Mark -->
-            <div class="error-icon">
-                <svg viewBox="0 0 52 52">
-                    <path class="x-mark" d="M16 16 L36 36 M36 16 L16 36"/>
+
+            <div class="icon-wrapper">
+                <svg viewBox="0 0 24 24">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
                 </svg>
             </div>
-            
-            <!-- Error Message -->
+
             <h1>فشل الدفع</h1>
-            <p class="message">لم تتم عملية الدفع بنجاح. يرجى المحاولة مرة أخرى.</p>
-            
-            <div class="divider"></div>
-            
-            <!-- Error Details -->
-            <div class="error-message">${errorMessage}</div>
-            
-            <!-- Retry Note -->
-            <p class="retry-note">يمكنك العودة للتطبيق وإعادة المحاولة 🔄</p>
+            <p>عذراً، لم نتمكن من إتمام عملية الدفع. يرجى التحقق من بياناتك والمحاولة مرة أخرى.</p>
+
+            <div class="error-box">${errorMessage}</div>
+
+            <a href="javascript:void(0)" onclick="window.location.reload()" class="btn">إعادة المحاولة</a>
         </div>
         <script>
           setTimeout(function() {
             window.location.href = 'payment-failed?paymentId=${paymentId || ''}&message=${encodeURIComponent(errorMessage)}';
-          }, 500);
+          }, 3000);
         </script>
     </body>
     </html>
   `;
-  
   return res.send(html);
 });
 
