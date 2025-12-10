@@ -116,13 +116,18 @@ exports.getAllProducts = asyncHandler(async (req, res) => {
   const totalProducts = await ProductModel.countDocuments(filter);
   const totalPages = Math.ceil(totalProducts / limit);
 
-  const products = await ProductModel.find(filter)
+  let mongooseQuery = ProductModel.find(filter)
     .populate("category", "name")
     .populate("subCategory", "name")
     .populate("subSubCategory", "name")
-    .skip(skip)
-    .limit(limit)
     .sort(sortOption);
+
+  // ✅ شرط إلغاء الـ Pagination
+  if (req.query.all !== 'true') {
+    mongooseQuery = mongooseQuery.skip(skip).limit(limit);
+  }
+
+  const products = await mongooseQuery;
 
   // defaults
   let wishlistIds = [];
@@ -167,10 +172,10 @@ exports.getAllProducts = asyncHandler(async (req, res) => {
     status: "success",
     results: formattedProducts.length,
     totalProducts,
-    totalPages,
-    currentPage: page,
-    hasNextPage: page < totalPages,
-    hasPrevPage: page > 1,
+    totalPages: req.query.all === 'true' ? 1 : totalPages,
+    currentPage: req.query.all === 'true' ? 1 : page,
+    hasNextPage: req.query.all === 'true' ? false : page < totalPages,
+    hasPrevPage: req.query.all === 'true' ? false : page > 1,
     data: formattedProducts,
   });
 });

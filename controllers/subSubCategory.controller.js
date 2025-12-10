@@ -56,18 +56,21 @@ exports.getAllSubSubCategories = asyncHandler(async (req, res) => {
   // ✅ عدد الصفحات
   const totalPages = Math.ceil(totalSubSubCategories / limit);
 
-  const subSubCategories = await SubSubCategory.find(filterObject)
-    .skip(skip)
-    .limit(limit)
-    .populate({ path: "subCategory", select: "name category -_id" });
+  let query = SubSubCategory.find(filterObject);
+
+  if (req.query.all !== 'true') {
+    query = query.skip(skip).limit(limit);
+  }
+
+  const subSubCategories = await query.populate({ path: "subCategory", select: "name category -_id" });
 
   res.status(200).json({
     results: subSubCategories.length,
     totalSubSubCategories,
-    totalPages,
-    currentPage: page,
-    hasNextPage: page < totalPages,
-    hasPrevPage: page > 1,
+    totalPages: req.query.all === 'true' ? 1 : totalPages,
+    currentPage: req.query.all === 'true' ? 1 : page,
+    hasNextPage: req.query.all === 'true' ? false : page < totalPages,
+    hasPrevPage: req.query.all === 'true' ? false : page > 1,
     data: subSubCategories,
   });
 });

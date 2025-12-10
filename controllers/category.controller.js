@@ -53,17 +53,22 @@ exports.getAllCategories = asyncHandler(async (req, res) => {
   const totalPages = Math.ceil(totalCategories / limit);
 
   // جلب البيانات
-  const categories = await CategoryModel.find(searchQuery)
-    .skip(skip)
-    .limit(limit);
+  let query = CategoryModel.find(searchQuery);
+
+  // ✅ شرط إلغاء الـ Pagination
+  if (req.query.all !== 'true') {
+    query = query.skip(skip).limit(limit);
+  }
+
+  const categories = await query;
 
   res.status(200).json({
     results: categories.length,
     totalCategories,
-    totalPages,
-    currentPage: page,
-    hasNextPage: page < totalPages,
-    hasPrevPage: page > 1,
+    totalPages: req.query.all === 'true' ? 1 : totalPages,
+    currentPage: req.query.all === 'true' ? 1 : page,
+    hasNextPage: req.query.all === 'true' ? false : page < totalPages,
+    hasPrevPage: req.query.all === 'true' ? false : page > 1,
     data: categories
   });
 });
