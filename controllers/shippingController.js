@@ -19,8 +19,6 @@ exports.addCity = asyncHandler(async (req, res, next) => {
   } else if (cost) {
     // Old format - will be converted to standard type by pre-save hook
     cityData.cost = cost;
-  } else {
-    return next(new ApiError("يرجى تقديم التكلفة أو أنواع الشحن", 400));
   }
 
   const newCity = await Shipping.create(cityData);

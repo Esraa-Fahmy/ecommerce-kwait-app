@@ -48,13 +48,7 @@ const shippingSchema = new mongoose.Schema({
   },
   shippingTypes: {
     type: [shippingTypeSchema],
-    required: [true, 'At least one shipping type is required'],
-    validate: {
-      validator: function(v) {
-        return v && v.length > 0;
-      },
-      message: 'At least one shipping type must be provided'
-    }
+    default: []
   }
 }, { timestamps: false });
 
