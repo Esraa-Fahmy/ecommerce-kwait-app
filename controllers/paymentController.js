@@ -6,6 +6,7 @@ const Cart = require("../models/cartModel");
 const Product = require("../models/product.model");
 const myFatoorah = require("../utils/myFatoorah");
 const { sendNotification } = require("../utils/sendNotifications");
+const { kuwaitiDateNow } = require('../utils/dateUtils');
 
 // 💳 Get All Payment Methods From MyFatoorah
 exports.getPaymentMethods = asyncHandler(async (req, res, next) => {
@@ -80,7 +81,7 @@ exports.initiatePayment = asyncHandler(async (req, res, next) => {
   order.paymentDetails = {
     invoiceId: paymentResult.invoiceId,
     status: 'pending',
-    initiatedAt: new Date(),
+    initiatedAt: kuwaitiDateNow(),
   };
   await order.save();
 
@@ -151,7 +152,7 @@ exports.checkPaymentStatus = asyncHandler(async (req, res, next) => {
   // ✅ لو الدفع فشل
   if (paymentStatus.status === 'Failed' && order.paymentDetails.status !== 'failed') {
     order.paymentDetails.status = 'failed';
-    order.paymentDetails.failedAt = new Date();
+    order.paymentDetails.failedAt = kuwaitiDateNow();
     await order.save();
 
     await sendNotification(
@@ -449,7 +450,7 @@ exports.paymentError = asyncHandler(async (req, res, next) => {
           order.paymentDetails = {
             ...order.paymentDetails,
             status: 'failed',
-            failedAt: new Date(),
+            failedAt: kuwaitiDateNow(),
           };
           await order.save();
 
@@ -719,7 +720,7 @@ exports.paymentWebhook = asyncHandler(async (req, res, next) => {
   } else if (Data.InvoiceStatus === 'Failed') {
     console.log('⚠️ Payment failed');
     order.paymentDetails.status = 'failed';
-    order.paymentDetails.failedAt = new Date();
+    order.paymentDetails.failedAt = kuwaitiDateNow();
     await order.save();
   }
 
@@ -754,7 +755,7 @@ exports.refundPayment = asyncHandler(async (req, res, next) => {
   order.status = 'refunded';
   order.paymentDetails.status = 'refunded';
   order.paymentDetails.refundId = refundResult.refundId;
-  order.paymentDetails.refundedAt = new Date();
+  order.paymentDetails.refundedAt = kuwaitiDateNow();
   await order.save();
 
   await sendNotification(
@@ -782,7 +783,7 @@ async function processSuccessfulPayment(order, paymentStatus) {
   order.paymentDetails.status = 'paid';
   order.paymentDetails.transactionId = paymentStatus.transactionId;
   order.paymentDetails.paymentMethod = paymentStatus.paymentMethod;
-  order.paymentDetails.paidAt = new Date();
+  order.paymentDetails.paidAt = kuwaitiDateNow();
   
   // خصم الكميات
   for (const item of order.cartItems) {
