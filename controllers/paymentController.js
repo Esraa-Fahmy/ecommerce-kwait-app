@@ -151,6 +151,7 @@ exports.checkPaymentStatus = asyncHandler(async (req, res, next) => {
 
   // ✅ لو الدفع فشل
   if (paymentStatus.status === 'Failed' && order.paymentDetails.status !== 'failed') {
+    order.status = 'failed';
     order.paymentDetails.status = 'failed';
     order.paymentDetails.failedAt = kuwaitiDateNow();
     await order.save();
@@ -719,6 +720,7 @@ exports.paymentWebhook = asyncHandler(async (req, res, next) => {
     });
   } else if (Data.InvoiceStatus === 'Failed') {
     console.log('⚠️ Payment failed');
+    order.status = 'failed';
     order.paymentDetails.status = 'failed';
     order.paymentDetails.failedAt = kuwaitiDateNow();
     await order.save();
