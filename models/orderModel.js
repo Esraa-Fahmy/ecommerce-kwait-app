@@ -34,7 +34,7 @@ const orderSchema = new mongoose.Schema({
     notes: String,
     phone: String,
   },
-  paymentMethod: { type: String, enum: ['visa', 'cod'], required: true },
+  paymentMethod: { type: String, enum: ['knet', 'cod'], required: true },
   
   // ✨ إضافة تفاصيل الدفع
   paymentDetails: {

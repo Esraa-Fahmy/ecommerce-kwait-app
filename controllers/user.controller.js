@@ -251,7 +251,7 @@ exports.getAppStats = asyncHandler(async (req, res, next) => {
   const paymentStats = await Order.aggregate([
     {
       $match: {
-        paymentMethod: 'visa',
+        paymentMethod: 'knet',
         'paymentDetails.status': 'paid'  // فقط المدفوعات الناجحة
       }
     },
@@ -288,7 +288,7 @@ exports.getAppStats = asyncHandler(async (req, res, next) => {
     {
       $match: {
         $or: [
-          { paymentMethod: 'visa', 'paymentDetails.status': 'paid' },
+          { paymentMethod: 'knet', 'paymentDetails.status': 'paid' },
           { paymentMethod: 'cod', status: 'delivered' }  // ✅ فقط المُسلّمة
         ]
       }
@@ -327,7 +327,7 @@ exports.getAppStats = asyncHandler(async (req, res, next) => {
       $match: {
         createdAt: { $gte: oneWeekAgo },
         $or: [
-          { paymentMethod: 'visa', 'paymentDetails.status': 'paid' },
+          { paymentMethod: 'knet', 'paymentDetails.status': 'paid' },
           { paymentMethod: 'cod', status: 'delivered' }  // ✅ فقط المُسلّمة
         ]
       }
@@ -350,7 +350,7 @@ exports.getAppStats = asyncHandler(async (req, res, next) => {
       $match: {
         createdAt: { $gte: oneMonthAgo },
         $or: [
-          { paymentMethod: 'visa', 'paymentDetails.status': 'paid' },
+          { paymentMethod: 'knet', 'paymentDetails.status': 'paid' },
           { paymentMethod: 'cod', status: 'delivered' }  // ✅ فقط المُسلّمة
         ]
       }
@@ -374,8 +374,8 @@ exports.getAppStats = asyncHandler(async (req, res, next) => {
 
       // إحصائيات المدفوعات
       payments: {
-        // Visa Payments
-        visa: {
+        // KNET Payments
+        knet: {
           totalOrders: paymentStats[0]?.totalPaidOrders || 0,
           totalRevenue: paymentStats[0]?.totalRevenue || 0,
           totalShipping: paymentStats[0]?.totalShipping || 0,

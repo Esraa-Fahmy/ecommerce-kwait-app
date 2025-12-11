@@ -13,8 +13,8 @@ exports.createOrderValidator = [
   check("paymentMethod")
     .notEmpty()
     .withMessage("طريقة الدفع مطلوبة")
-    .isIn(["cod", "visa"])
-    .withMessage("يجب أن تكون طريقة الدفع إما 'cod' أو 'visa'"),
+    .isIn(["cod", "knet"])
+    .withMessage("يجب أن تكون طريقة الدفع إما 'cod' أو 'knet'"),
 
   check("coupon")
     .optional()

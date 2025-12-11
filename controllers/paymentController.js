@@ -48,8 +48,8 @@ exports.initiatePayment = asyncHandler(async (req, res, next) => {
     return next(new ApiError('وصول غير مصرح به لهذا الطلب', 403));
   }
 
-  if (order.paymentMethod !== 'visa') {
-    return next(new ApiError('هذا الطلب غير مخصص للدفع بالفيزا', 400));
+  if (order.paymentMethod !== 'knet') {
+    return next(new ApiError('هذا الطلب غير مخصص للدفع بالكي نت (KNET)', 400));
   }
 
   if (order.status !== 'pending') {

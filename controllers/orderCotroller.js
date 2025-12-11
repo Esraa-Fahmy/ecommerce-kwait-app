@@ -132,7 +132,7 @@ exports.previewOrder = asyncHandler(async (req, res, next) => {
 exports.createOrder = asyncHandler(async (req, res, next) => {
   const { cartId, addressId, paymentMethod = "cod", coupon, shippingTypeId = 'standard' } = req.body;
 
-  if (!["cod", "visa"].includes(paymentMethod)) {
+  if (!["cod", "knet"].includes(paymentMethod)) {
     return next(new ApiError("طريقة الدفع غير صالحة", 400));
   }
 
@@ -197,7 +197,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
     total: totals.totalOrderPrice,
     coupon,
     paymentDetails: {
-      status: paymentMethod === "visa" ? "pending" : "paid",
+      status: paymentMethod === "knet" ? "pending" : "paid",
       initiatedAt: kuwaitiDateNow(),
     },
   });
@@ -235,9 +235,9 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
 
   res.status(201).json({
     status: "success",
-    message: paymentMethod === "visa" ? "تم إنشاء الطلب. يرجى إتمام الدفع." : totals.couponMessage || "تم إنشاء الطلب بنجاح",
+    message: paymentMethod === "knet" ? "تم إنشاء الطلب. يرجى إتمام الدفع." : totals.couponMessage || "تم إنشاء الطلب بنجاح",
     data: orderResponse,
-    requiresPayment: paymentMethod === "visa",
+    requiresPayment: paymentMethod === "knet",
   });
 });
 
@@ -295,7 +295,7 @@ exports.getOrder = asyncHandler(async (req, res, next) => {
 
   // 🧠 Smart Check: لو الأوردر لسه pending وفيه invoiceId، نتأكد من MyFatoorah فوراً
   if (
-    order.paymentMethod === 'visa' && 
+    order.paymentMethod === 'knet' && 
     order.paymentDetails.status !== 'paid' && 
     order.paymentDetails.invoiceId
   ) {
