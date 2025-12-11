@@ -12,6 +12,7 @@ const {uploadSingleImage} = require('../middlewares/uploadImageMiddleWare');
 const createToken = require("../utils/createToken");
 const cartModel = require("../models/cartModel");
 const offerModel = require("../models/offer.model");
+const { kuwaitiDateNow } = require('../utils/dateUtils');
 
 // Upload single image
 exports.uploadUserImage = uploadSingleImage('profileImg');
@@ -88,7 +89,7 @@ exports.getUsers = asyncHandler(async (req, res) => {
 exports.createUser = asyncHandler(async (req, res, next) => {
   // ✅ التحقق من أن الـ role هو admin فقط
   if (req.body.role && req.body.role !== 'admin') {
-    return next(new ApiError('You can only create admin users through this endpoint. Regular users must sign up through /api/v1/auth/signup', 400));
+    return next(new ApiError('يمكنك فقط إنشاء مستخدمين مشرفين من خلال هذا المسار. يجب على المستخدمين العاديين التسجيل من خلال /api/v1/auth/signup', 400));
   }
 
   // ✅ إجبار الـ role يكون admin
@@ -104,7 +105,7 @@ exports.getUserById = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
   const user = await User.findById(id);
   if (!user) {
-    return next(new ApiError(`No user found for ID ${id}`, 404));
+    return next(new ApiError(`لا يوجد مستخدم بهذا المعرف ${id}`, 404));
   }
   res.status(200).json({ data: user });
 });
@@ -122,7 +123,7 @@ exports.updateUser = asyncHandler(async (req, res, next) => {
 
   // التحقق إذا كان المستخدم موجودًا
   if (!updatedUser) {
-    return next(new ApiError(`No user found for ID ${id}`, 404));
+    return next(new ApiError(`لا يوجد مستخدم بهذا المعرف ${id}`, 404));
   }
 
   // إرسال البيانات المحدثة في الاستجابة
@@ -140,9 +141,9 @@ exports.deleteUser = asyncHandler(async (req, res, next) => {
   const user = await User.findByIdAndDelete(id);
 
   if (!user) {
-    return next(new ApiError(`No user found for ID ${id}`, 404));
+    return next(new ApiError(`لا يوجد مستخدم بهذا المعرف ${id}`, 404));
   }
-  res.status(200).json({ message: "User deleted successfully" });
+  res.status(200).json({ message: "تم حذف المستخدم بنجاح" });
 });
 
 
@@ -167,7 +168,7 @@ exports.updateLoggedUserPassword = asyncHandler(async (req, res, next) => {
     req.user._id,
     {
       password: await bcrypt.hash(req.body.password, 12),
-      passwordChangedAt: Date.now(),
+      passwordChangedAt: kuwaitiDateNow(),
     },
     {
       new: true,
@@ -209,12 +210,12 @@ exports.deleteLoggedUserAccount = asyncHandler(async (req, res, next) => {
   const user = await User.findByIdAndDelete(req.user._id);
 
   if (!user) {
-    return next(new ApiError(`No user found for this account`, 404));
+    return next(new ApiError(`لا يوجد مستخدم لهذا الحساب`, 404));
   }
 
   res.status(200).json({
     status: 'success',
-    message: 'Your account has been deleted successfully',
+    message: 'تم حذف حسابك بنجاح',
   });
 });
 
@@ -429,7 +430,7 @@ exports.updateFcmToken = asyncHandler(async (req, res, next) => {
   const { fcmToken } = req.body;
 
   if (!fcmToken) {
-    return next(new ApiError("FCM Token is required", 400));
+    return next(new ApiError("رمز FCM مطلوب", 400));
   }
 
   const user = await User.findByIdAndUpdate(
@@ -440,7 +441,7 @@ exports.updateFcmToken = asyncHandler(async (req, res, next) => {
 
   res.status(200).json({
     status: "success",
-    message: "FCM Token updated successfully",
+    message: "تم تحديث رمز FCM بنجاح",
     data: user
   });
 });

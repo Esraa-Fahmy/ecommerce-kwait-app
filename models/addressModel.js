@@ -1,5 +1,6 @@
 // models/address.model.js
 const mongoose = require('mongoose');
+const kuwaitTimestamp = require('./plugins/kuwaitTimestamp');
 
 const addressSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.ObjectId, ref: 'User', required: true },
@@ -11,6 +12,8 @@ const addressSchema = new mongoose.Schema({
   apartment: String,
   notes: { type: String, required: true },
   phone: String,
-}, { timestamps: true });
+}, { timestamps: false });
+
+addressSchema.plugin(kuwaitTimestamp);
 
 module.exports = mongoose.model('Address', addressSchema);

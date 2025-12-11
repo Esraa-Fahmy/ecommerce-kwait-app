@@ -50,7 +50,7 @@ exports.getAllOffers = asyncHandler(async (req, res) => {
 exports.getOffer = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
   const offer = await OfferModel.findById(id);
-  if (!offer) return next(new ApiError(`No offer found for this id ${id}`, 404));
+  if (!offer) return next(new ApiError(`لا يوجد عرض بهذا المعرف ${id}`, 404));
   res.status(200).json({ data: offer });
 });
 
@@ -79,7 +79,7 @@ await Promise.all(users.map(user =>
 exports.updateOffer = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
   const offer = await OfferModel.findByIdAndUpdate(id, req.body, { new: true });
-  if (!offer) return next(new ApiError(`No offer found for this id ${id}`, 404));
+  if (!offer) return next(new ApiError(`لا يوجد عرض بهذا المعرف ${id}`, 404));
   res.status(200).json({ data: offer });
 });
 
@@ -89,8 +89,8 @@ exports.updateOffer = asyncHandler(async (req, res, next) => {
 exports.deleteOffer = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
   const offer = await OfferModel.findByIdAndDelete(id);
-  if (!offer) return next(new ApiError(`No offer found for this id ${id}`, 404));
-  res.status(200).json({ message: "Offer deleted successfully" });
+  if (!offer) return next(new ApiError(`لا يوجد عرض بهذا المعرف ${id}`, 404));
+  res.status(200).json({ message: "تم حذف العرض بنجاح" });
 });
 
 // ============================
@@ -100,7 +100,7 @@ exports.validateCoupon = asyncHandler(async (req, res, next) => {
   const { couponCode, cartId } = req.body;
 
   if (!couponCode) {
-    return next(new ApiError("Coupon code is required", 400));
+    return next(new ApiError("رمز الكوبون مطلوب", 400));
   }
 
   const coupon = await OfferModel.findOne({ couponCode, offerType: "coupon", isActive: true });
@@ -131,7 +131,7 @@ exports.validateCoupon = asyncHandler(async (req, res, next) => {
   
   if (cartId) {
     const cart = await Cart.findById(cartId).populate("cartItems.product");
-    if (!cart) return next(new ApiError("Cart not found", 404));
+    if (!cart) return next(new ApiError("السلة غير موجودة", 404));
 
     // ✅ استخدام priceAfterOffer بدلاً من السعر الأصلي
     for (const item of cart.cartItems) {

@@ -5,15 +5,15 @@ const validatorMiddleware = require('../middlewares/validatorMiddleware');
 exports.initiatePaymentValidator = [
   check('orderId')
     .notEmpty()
-    .withMessage('Order ID is required')
+    .withMessage('معرف الطلب مطلوب')
     .isMongoId()
-    .withMessage('Invalid Order ID format'),
+    .withMessage('صيغة معرف الطلب غير صالحة'),
   
   check('paymentMethodId')
     .notEmpty()
-    .withMessage('Payment method ID is required')
+    .withMessage('معرف طريقة الدفع مطلوب')
     .isInt({ min: 1 })
-    .withMessage('Payment method ID must be a positive integer'),
+    .withMessage('يجب أن يكون معرف طريقة الدفع رقمًا صحيحًا موجبًا'),
   
   validatorMiddleware,
 ];
@@ -22,16 +22,16 @@ exports.initiatePaymentValidator = [
 exports.refundPaymentValidator = [
   check('orderId')
     .notEmpty()
-    .withMessage('Order ID is required')
+    .withMessage('معرف الطلب مطلوب')
     .isMongoId()
-    .withMessage('Invalid Order ID format'),
+    .withMessage('صيغة معرف الطلب غير صالحة'),
   
   check('reason')
     .optional()
     .isString()
-    .withMessage('Reason must be a string')
+    .withMessage('يجب أن يكون السبب نصًا')
     .isLength({ max: 500 })
-    .withMessage('Reason must not exceed 500 characters'),
+    .withMessage('يجب أن لا يتجاوز السبب 500 حرف'),
   
   validatorMiddleware,
 ];
@@ -40,9 +40,9 @@ exports.refundPaymentValidator = [
 exports.checkPaymentStatusValidator = [
   check('invoiceId')
     .notEmpty()
-    .withMessage('Invoice ID is required')
+    .withMessage('معرف الفاتورة مطلوب')
     .isNumeric()
-    .withMessage('Invoice ID must be numeric'),
+    .withMessage('يجب أن يكون معرف الفاتورة رقميًا'),
   
   validatorMiddleware,
 ];

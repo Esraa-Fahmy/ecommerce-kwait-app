@@ -11,7 +11,7 @@ exports.addAddress = asyncHandler(async (req, res) => {
 
   res.status(201).json({
     status: "success",
-    message: "Address added successfully",
+    message: "تم إضافة العنوان بنجاح",
     data: address,
   });
 });
@@ -36,11 +36,11 @@ exports.updateAddress = asyncHandler(async (req, res, next) => {
     req.body,
     { new: true }
   );
-  if (!address) return next(new ApiError("Address not found", 404));
+  if (!address) return next(new ApiError("العنوان غير موجود", 404));
 
   res.status(200).json({
     status: "success",
-    message: "Address updated successfully",
+    message: "تم تحديث العنوان بنجاح",
     data: address,
   });
 });
@@ -49,10 +49,10 @@ exports.updateAddress = asyncHandler(async (req, res, next) => {
 exports.deleteAddress = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
   const address = await Address.findOneAndDelete({ _id: id, user: req.user._id });
-  if (!address) return next(new ApiError("Address not found", 404));
+  if (!address) return next(new ApiError("العنوان غير موجود", 404));
 
   res.status(200).json({
     status: "success",
-    message: "Address deleted successfully",
+    message: "تم حذف العنوان بنجاح",
   });
 });

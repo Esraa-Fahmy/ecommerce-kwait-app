@@ -67,11 +67,11 @@ exports.updateReview = asyncHandler(async (req, res, next) => {
   const { rating, comment } = req.body;
 
   const review = await Review.findById(id);
-  if (!review) return next(new ApiError('Review not found', 404));
+  if (!review) return next(new ApiError('التقييم غير موجود', 404));
 
   // السماح فقط لصاحب الريڤيو بالتعديل
   if (review.user.toString() !== req.user._id.toString()) {
-    return next(new ApiError('You can update only your own review', 403));
+    return next(new ApiError('يمكنك تعديل تقييمك الخاص فقط', 403));
   }
 
   if (rating) review.rating = rating;
@@ -80,7 +80,7 @@ exports.updateReview = asyncHandler(async (req, res, next) => {
 
   res.status(200).json({
     status: 'success',
-    message: 'Review updated successfully',
+    message: 'تم تحديث التقييم بنجاح',
     data: review,
   });
 });
@@ -90,18 +90,18 @@ exports.deleteReview = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
 
   const review = await Review.findById(id);
-  if (!review) return next(new ApiError('Review not found', 404));
+  if (!review) return next(new ApiError('التقييم غير موجود', 404));
 
   // السماح فقط لصاحب الريڤيو بالحذف
   if (review.user.toString() !== req.user._id.toString()) {
-    return next(new ApiError('You can delete only your own review', 403));
+    return next(new ApiError('يمكنك حذف تقييمك الخاص فقط', 403));
   }
 
   await Review.findByIdAndDelete(id);
 
   res.status(200).json({
     status: 'success',
-    message: 'Review deleted successfully',
+    message: 'تم حذف التقييم بنجاح',
   });
 });
 

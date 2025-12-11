@@ -1,4 +1,6 @@
 const mongoose = require('mongoose');
+const { kuwaitiDateNow } = require('../utils/dateUtils');
+const kuwaitTimestamp = require('./plugins/kuwaitTimestamp');
 
 const orderSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.ObjectId, ref: 'User', required: true },
@@ -70,7 +72,7 @@ const orderSchema = new mongoose.Schema({
     deliveryTime: String,
     selectedAt: {
       type: Date,
-      default: Date.now
+      default: kuwaitiDateNow
     }
   },
   
@@ -89,6 +91,8 @@ const orderSchema = new mongoose.Schema({
     ],
     default: 'pending'
   }
-}, { timestamps: true });
+}, { timestamps: false });
+
+orderSchema.plugin(kuwaitTimestamp);
 
 module.exports = mongoose.model('Order', orderSchema);

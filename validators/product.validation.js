@@ -5,48 +5,48 @@ const subCategoryModel = require("../models/subcategory.model");
 const CategoryModel = require("../models/category.model");
 
 exports.getProductValidator = [
-  check("id").isMongoId().withMessage("Invalid product id format"),
+  check("id").isMongoId().withMessage("صيغة معرف المنتج غير صالحة"),
   validatorMiddleware,
 ];
 
 exports.createProductValidator = [
   check("code")
     .notEmpty()
-    .withMessage("Product code is required")
+    .withMessage("كود المنتج مطلوب")
     .isLength({ min: 2 })
-    .withMessage("Product code must be at least 2 characters"),
+    .withMessage("يجب أن يكون كود المنتج حرفين على الأقل"),
 
   check("title")
     .notEmpty()
-    .withMessage("Product title is required")
+    .withMessage("عنوان المنتج مطلوب")
     .isLength({ min: 3 })
-    .withMessage("Too short product title")
+    .withMessage("عنوان المنتج قصير جداً")
     .isLength({ max: 40 })
-    .withMessage("Too long product title"),
+    .withMessage("عنوان المنتج طويل جداً"),
 
   check("description")
     .notEmpty()
-    .withMessage("Product description is required"),
+    .withMessage("وصف المنتج مطلوب"),
 
   check("quantity")
     .notEmpty()
-    .withMessage("Product quantity is required")
+    .withMessage("كمية المنتج مطلوبة")
     .isNumeric()
-    .withMessage("Quantity must be a number"),
+    .withMessage("يجب أن تكون الكمية رقمًا"),
 
   check("price")
     .notEmpty()
-    .withMessage("Product price is required")
+    .withMessage("سعر المنتج مطلوب")
     .isFloat({ gt: 0 })
-    .withMessage("Price must be greater than 0"),
+    .withMessage("يجب أن يكون السعر أكبر من 0"),
 
   check("priceAfterDiscount")
     .optional()
     .isFloat({ gt: 0 })
-    .withMessage("Price after discount must be greater than 0")
+    .withMessage("يجب أن يكون السعر بعد الخصم أكبر من 0")
     .custom((value, { req }) => {
       if (value >= req.body.price) {
-        throw new Error("Discount price should be lower than original price");
+        throw new Error("يجب أن يكون سعر الخصم أقل من السعر الأصلي");
       }
       return true;
     }),
@@ -55,10 +55,10 @@ exports.createProductValidator = [
   check("category")
     .optional()
     .isMongoId()
-    .withMessage("Invalid category ID format")
+    .withMessage("صيغة معرف الفئة غير صالحة")
     .custom(async (categoryId) => {
       const category = await CategoryModel.findById(categoryId);
-      if (!category) throw new Error("Category not found");
+      if (!category) throw new Error("الفئة غير موجودة");
       return true;
     }),
 
@@ -66,10 +66,10 @@ exports.createProductValidator = [
   check("subCategory")
     .optional()
     .isMongoId()
-    .withMessage("Invalid subCategory ID format")
+    .withMessage("صيغة معرف الفئة الفرعية غير صالحة")
     .custom(async (subCategoryId) => {
       const subCat = await subCategoryModel.findById(subCategoryId);
-      if (!subCat) throw new Error("SubCategory not found");
+      if (!subCat) throw new Error("الفئة الفرعية غير موجودة");
       return true;
     }),
 
@@ -77,28 +77,28 @@ exports.createProductValidator = [
   check("subSubCategory")
     .optional()
     .isMongoId()
-    .withMessage("Invalid subSubCategory ID format")
+    .withMessage("صيغة معرف الفئة الفرعية الفرعية غير صالحة")
     .custom(async (subSubCategoryId) => {
       const subSub = await subSubCategoryModel.findById(subSubCategoryId);
-      if (!subSub) throw new Error("SubSubCategory not found");
+      if (!subSub) throw new Error("الفئة الفرعية الفرعية غير موجودة");
       return true;
     }),
 
   check("colors")
     .optional()
     .isArray()
-    .withMessage("Colors should be an array of strings"),
+    .withMessage("يجب أن تكون الألوان مصفوفة من النصوص"),
 
   check("sizes")
     .optional()
     .isArray()
-    .withMessage("Sizes should be an array of strings"),
+    .withMessage("يجب أن تكون الأحجام مصفوفة من النصوص"),
 
   validatorMiddleware,
 ];
 
 exports.updateProductValidator = [
-  check("id").isMongoId().withMessage("Invalid product ID format"),
+  check("id").isMongoId().withMessage("صيغة معرف المنتج غير صالحة"),
   check("title").optional().isLength({ min: 3, max: 40 }),
   check("price").optional().isFloat({ gt: 0 }),
   check("quantity").optional().isNumeric(),
@@ -107,7 +107,7 @@ exports.updateProductValidator = [
     .isFloat({ gt: 0 })
     .custom((value, { req }) => {
       if (value >= req.body.price) {
-        throw new Error("Discount price should be lower than original price");
+        throw new Error("يجب أن يكون سعر الخصم أقل من السعر الأصلي");
       }
       return true;
     }),
@@ -115,6 +115,6 @@ exports.updateProductValidator = [
 ];
 
 exports.deleteProductValidator = [
-  check("id").isMongoId().withMessage("Invalid product ID format"),
+  check("id").isMongoId().withMessage("صيغة معرف المنتج غير صالحة"),
   validatorMiddleware,
 ];

@@ -237,23 +237,23 @@ exports.addToCart = asyncHandler(async (req, res, next) => {
   const { productId, color, size, material, quantity = 1 } = req.body;
 
   if (req.user && req.user.role === "admin") {
-    return next(new ApiError("Admin cannot add products to cart", 403));
+    return next(new ApiError("لا يمكن للمشرف إضافة منتجات إلى السلة", 403));
   }
 
   const product = await Product.findById(productId);
-  if (!product) return next(new ApiError("Product not found", 404));
+  if (!product) return next(new ApiError("المنتج غير موجود", 404));
 
   if (Array.isArray(product.colors) && product.colors.length > 0 && !color)
-    return next(new ApiError("You must select a color for this product", 400));
+    return next(new ApiError("يجب اختيار لون لهذا المنتج", 400));
   if (Array.isArray(product.sizes) && product.sizes.length > 0 && !size)
-    return next(new ApiError("You must select a size for this product", 400));
+    return next(new ApiError("يجب اختيار مقاس لهذا المنتج", 400));
   if (product.Material && Array.isArray(product.Material) && product.Material.length > 0 && !material)
-    return next(new ApiError("You must select a material for this product", 400));
+    return next(new ApiError("يجب اختيار مادة لهذا المنتج", 400));
 
   if (product.quantity <= 0)
-    return next(new ApiError("This product is out of stock", 400));
+    return next(new ApiError("هذا المنتج غير متوفر في المخزون", 400));
   if (quantity > product.quantity)
-    return next(new ApiError(`Only ${product.quantity} items available in stock`, 400));
+    return next(new ApiError(`متاح فقط ${product.quantity} قطعة في المخزون`, 400));
 
   let cart = await Cart.findOne({ user: req.user._id }).populate("cartItems.product");
 
@@ -304,7 +304,7 @@ exports.addToCart = asyncHandler(async (req, res, next) => {
       const existing = cart.cartItems[itemIndex];
       const newTotalQty = Number(existing.quantity || 0) + Number(quantity || 0);
       if (newTotalQty > product.quantity)
-        return next(new ApiError(`Only ${product.quantity} items available in stock`, 400));
+        return next(new ApiError(`متاح فقط ${product.quantity} قطعة في المخزون`, 400));
       existing.quantity = newTotalQty;
       existing.priceTotal = Number(existing.priceAfterOffer * existing.quantity); // 👈 تحديث السعر الكلي
     } else {
@@ -341,7 +341,7 @@ exports.addToCart = asyncHandler(async (req, res, next) => {
 
   res.status(200).json({
     status: "success",
-    message: "Product added to cart successfully",
+    message: "تم إضافة المنتج إلى السلة بنجاح",
     data: updatedCart,
   });
 });
@@ -409,20 +409,20 @@ exports.updateCartItem = asyncHandler(async (req, res, next) => {
   const { quantity, color, size, material } = req.body;
 
   if (req.user.role === "admin") {
-    return next(new ApiError("Admin cannot modify cart", 403));
+    return next(new ApiError("لا يمكن للمشرف تعديل السلة", 403));
   }
 
   const cart = await Cart.findOne({ user: req.user._id }).populate("cartItems.product");
-  if (!cart) return next(new ApiError("No cart found for this user", 404));
+  if (!cart) return next(new ApiError("لم يتم العثور على سلة لهذا المستخدم", 404));
 
   const item = cart.cartItems.id(itemId);
-  if (!item) return next(new ApiError("Item not found in cart", 404));
+  if (!item) return next(new ApiError("العنصر غير موجود في السلة", 404));
 
   const product = await Product.findById(item.product);
-  if (!product) return next(new ApiError("Product not found", 404));
+  if (!product) return next(new ApiError("المنتج غير موجود", 404));
 
   if (quantity && quantity > product.quantity)
-    return next(new ApiError(`Only ${product.quantity} items available in stock`, 400));
+    return next(new ApiError(`متاح فقط ${product.quantity} قطعة في المخزون`, 400));
 
   if (quantity) item.quantity = quantity;
   if (color) item.color = color;
@@ -445,7 +445,7 @@ exports.updateCartItem = asyncHandler(async (req, res, next) => {
 
   res.status(200).json({
     status: "success",
-    message: "Cart item updated successfully",
+    message: "تم تحديث عنصر السلة بنجاح",
     data: updatedCart,
   });
 });
@@ -456,7 +456,7 @@ exports.updateCartItem = asyncHandler(async (req, res, next) => {
 // 🔴 حذف منتج من الكارت
 exports.removeItemFromCart = asyncHandler(async (req, res, next) => {
   if (req.user && req.user.role === "admin") {
-    return next(new ApiError("Admin cannot modify cart", 403));
+    return next(new ApiError("لا يمكن للمشرف تعديل السلة", 403));
   }
 
   const { itemId } = req.params;
@@ -467,13 +467,13 @@ exports.removeItemFromCart = asyncHandler(async (req, res, next) => {
     { new: true }
   ).populate("cartItems.product");
 
-  if (!cart) return next(new ApiError("Cart not found", 404));
+  if (!cart) return next(new ApiError("السلة غير موجودة", 404));
 
   await recalcCartTotals(cart);
 
   res.status(200).json({
     status: "success",
-    message: "Item removed successfully",
+    message: "تم حذف العنصر بنجاح",
     data: cart,
   });
 });
@@ -481,14 +481,14 @@ exports.removeItemFromCart = asyncHandler(async (req, res, next) => {
 // 🧺 حذف الكارت بالكامل
 exports.clearCart = asyncHandler(async (req, res, next) => {
   if (req.user && req.user.role === "admin") {
-    return next(new ApiError("Admin cannot clear cart", 403));
+    return next(new ApiError("لا يمكن للمشرف إفراغ السلة", 403));
   }
 
   await Cart.findOneAndDelete({ user: req.user._id });
 
   res.status(204).json({
     status: "success",
-    message: "Cart cleared successfully",
+    message: "تم إفراغ السلة بنجاح",
     data: [],
   });
 });

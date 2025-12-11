@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const kuwaitTimestamp = require('./plugins/kuwaitTimestamp');
 
 const cartSchema = new mongoose.Schema({
   cartItems: [
@@ -49,6 +50,8 @@ const cartSchema = new mongoose.Schema({
     type: mongoose.Schema.ObjectId,
     ref: 'User',
   },
-}, { timestamps: true });
+}, { timestamps: false });
+
+cartSchema.plugin(kuwaitTimestamp);
 
 module.exports = mongoose.model('Cart', cartSchema);

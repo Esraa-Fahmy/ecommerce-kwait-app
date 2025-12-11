@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const kuwaitTimestamp = require('./plugins/kuwaitTimestamp');
 const bcrypt = require('bcrypt');
 
 const userSchema = new mongoose.Schema(
@@ -57,8 +58,10 @@ const userSchema = new mongoose.Schema(
       default: null
     },
   },
-  { timestamps: true }
+  { timestamps: false }
 );
+
+userSchema.plugin(kuwaitTimestamp);
 
 // صورة البروفايل
 const setImageURL = (doc) => {

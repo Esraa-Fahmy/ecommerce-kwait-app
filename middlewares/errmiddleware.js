@@ -16,10 +16,10 @@ const sendErrorForDev = (err, res) =>
     });
   
   const handleJwtInvalidSignature = () =>
-    new ApiError('Invalid token, please login again..', 401);
+    new ApiError('رمز المميز غير صالح، يرجى تسجيل الدخول مرة أخرى..', 401);
   
   const handleJwtExpired = () =>
-    new ApiError('Expired token, please login again..', 401);
+    new ApiError('انتهت صلاحية الرمز المميز، يرجى تسجيل الدخول مرة أخرى..', 401);
   
   const globalError = (err, req, res, next) => {
     err.statusCode = err.statusCode || 500;

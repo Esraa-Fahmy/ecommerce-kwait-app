@@ -7,6 +7,8 @@ const crypto = require("crypto");
 const sendEmail = require("../utils/sendEmail");
 const createToken = require("../utils/createToken");
 const cartModel = require("../models/cartModel");
+const { kuwaitiDateNow } = require('../utils/dateUtils');
+const moment = require('moment-timezone');
 
 // @desc    Signup
 // @route   POST /api/v1/auth/signup
@@ -31,7 +33,7 @@ exports.login = asyncHandler(async (req, res, next) => {
   const user = await User.findOne({ email: req.body.email }).select("+password");
 
   if (!user || !(await bcrypt.compare(req.body.password, user.password))) {
-    return next(new ApiError("Incorrect email or password", 401));
+    return next(new ApiError("البريد الإلكتروني أو كلمة المرور غير صحيحة", 401));
   }
 
   // إخفاء كلمة المرور
@@ -83,14 +85,18 @@ exports.protect = asyncHandler(async (req, res, next) => {
   // Check if user exists
   const currentUser = await User.findById(decoded.userId);
   if (!currentUser) {
-    return next(new ApiError("The user that belong to this token does no longer exist", 401));
+    return next(new ApiError("المستخدم المرتبط بهذا الرمز لم يعد موجوداً", 401));
   }
 
   // Check if password changed after token creation
   if (currentUser.passwordChangedAt) {
-    const passChangedTimestamp = parseInt(currentUser.passwordChangedAt.getTime() / 1000, 10);
+    // currentUser.passwordChangedAt is stored as "Fake UTC" (Kuwait time stored as UTC)
+    // We need to interpret it as Kuwait time to get the real UTC timestamp for comparison
+    const passwordChangedAtString = currentUser.passwordChangedAt.toISOString().replace('Z', '');
+    const passChangedTimestamp = moment.tz(passwordChangedAtString, 'Asia/Kuwait').unix();
+
     if (passChangedTimestamp > decoded.iat) {
-      return next(new ApiError("User recently changed his password. please login again..", 401));
+      return next(new ApiError("قام المستخدم بتغيير كلمة المرور مؤخراً. يرجى تسجيل الدخول مرة أخرى..", 401));
     }
   }
 
@@ -102,7 +108,7 @@ exports.protect = asyncHandler(async (req, res, next) => {
 exports.allowedTo = (...roles) =>
   asyncHandler(async (req, res, next) => {
     if (!roles.includes(req.user.role)) {
-      return next(new ApiError("You are not allowed to access this route", 403));
+      return next(new ApiError("ليس لديك صلاحية للوصول إلى هذا المسار", 403));
     }
     next();
   });
@@ -113,14 +119,19 @@ exports.allowedTo = (...roles) =>
 exports.forgotPassword = asyncHandler(async (req, res, next) => {
   const user = await User.findOne({ email: req.body.email });
   if (!user) {
-    return next(new ApiError(`There is no user with that email ${req.body.email}`, 404));
+    return next(new ApiError(`لا يوجد مستخدم بهذا البريد الإلكتروني ${req.body.email}`, 404));
   }
 
   const resetCode = Math.floor(1000 + Math.random() * 9000).toString();
   const hashedResetCode = crypto.createHash("sha256").update(resetCode).digest("hex");
 
   user.passwordResetCode = hashedResetCode;
-  user.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+  
+  // 10 minutes from now (Kuwait Time)
+  const now = kuwaitiDateNow();
+  now.setMinutes(now.getMinutes() + 10);
+  user.passwordResetExpires = now;
+
   user.passwordResetVerified = false;
 
   await user.save();
@@ -178,7 +189,7 @@ exports.verifyPassResetCode = asyncHandler(async (req, res, next) => {
 
   // 1️⃣ التحقق إن المستخدم بعت الإيميل والكود
   if (!email || !resetCode) {
-    return next(new ApiError("Email and reset code are required", 400));
+    return next(new ApiError("البريد الإلكتروني ورمز إعادة التعيين مطلوبان", 400));
   }
 
   // 2️⃣ نعمل hash للكود زي ما حفظناه قبل كده
@@ -188,12 +199,12 @@ exports.verifyPassResetCode = asyncHandler(async (req, res, next) => {
   const user = await User.findOne({
     email,
     passwordResetCode: hashedResetCode,
-    passwordResetExpires: { $gt: Date.now() },
+    passwordResetExpires: { $gt: kuwaitiDateNow() },
   });
 
   // 4️⃣ لو مفيش يوزر أو الكود غلط أو انتهت صلاحيته
   if (!user) {
-    return next(new ApiError("Reset code invalid or expired", 400));
+    return next(new ApiError("رمز إعادة التعيين غير صالح أو منتهي الصلاحية", 400));
   }
 
   // 5️⃣ نحدث الحالة إنه تم التحقق من الكود
@@ -202,7 +213,7 @@ exports.verifyPassResetCode = asyncHandler(async (req, res, next) => {
 
   res.status(200).json({
     status: "Success",
-    message: "Reset code verified successfully. You can now reset your password.",
+    message: "تم التحقق من رمز إعادة التعيين بنجاح. يمكنك الآن إعادة تعيين كلمة المرور.",
   });
 });
 
@@ -217,21 +228,21 @@ exports.resetPassword = asyncHandler(async (req, res, next) => {
   const { email, newPassword, confirmNewPassword } = req.body;
 
   if (!email || !newPassword || !confirmNewPassword) {
-    return next(new ApiError("Email, new password, and confirmation are required", 400));
+    return next(new ApiError("البريد الإلكتروني، وكلمة المرور الجديدة، وتأكيدها مطلوبان", 400));
   }
 
   if (newPassword !== confirmNewPassword) {
-    return next(new ApiError("Passwords do not match", 400));
+    return next(new ApiError("كلمتا المرور غير متطابقتين", 400));
   }
 
   const user = await User.findOne({
     email,
     passwordResetVerified: true,
-    passwordResetExpires: { $gt: Date.now() },
+    passwordResetExpires: { $gt: kuwaitiDateNow() },
   });
 
   if (!user) {
-    return next(new ApiError("Invalid or expired reset code", 400));
+    return next(new ApiError("رمز إعادة التعيين غير صالح أو منتهي الصلاحية", 400));
   }
 
   user.password = newPassword;
@@ -244,7 +255,7 @@ exports.resetPassword = asyncHandler(async (req, res, next) => {
   const token = createToken(user._id);
   res.status(200).json({
     status: "success",
-    message: "Password reset successfully",
+    message: "تم إعادة تعيين كلمة المرور بنجاح",
     token,
   });
 });

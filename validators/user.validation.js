@@ -6,49 +6,49 @@ const bcrypt = require('bcrypt');
 exports.createUserValidator = [
   check('firstName')
     .notEmpty()
-    .withMessage('First name is required')
+    .withMessage('الاسم الأول مطلوب')
     .isLength({ min: 2 })
-    .withMessage('Too short first name'),
+    .withMessage('الاسم الأول قصير جداً'),
 
   check('lastName')
     .notEmpty()
-    .withMessage('Last name is required')
+    .withMessage('الاسم الأخير مطلوب')
     .isLength({ min: 2 })
-    .withMessage('Too short last name'),
+    .withMessage('الاسم الأخير قصير جداً'),
 
   check('email')
     .notEmpty()
-    .withMessage('Email required')
+    .withMessage('البريد الإلكتروني مطلوب')
     .isEmail()
-    .withMessage('Invalid email address')
+    .withMessage('عنوان البريد الإلكتروني غير صالح')
     .custom((val) =>
       User.findOne({ email: val }).then((user) => {
         if (user) {
-          return Promise.reject(new Error('E-mail already in use'));
+          return Promise.reject(new Error('البريد الإلكتروني مستخدم بالفعل'));
         }
       })
     ),
 
   check('password')
     .notEmpty()
-    .withMessage('Password required')
+    .withMessage('كلمة المرور مطلوبة')
     .isLength({ min: 4 })
-    .withMessage('Password must be at least 4 characters')
+    .withMessage('يجب أن تكون كلمة المرور 4 أحرف على الأقل')
     .custom((password, { req }) => {
       if (password !== req.body.passwordConfirm) {
-        throw new Error('Password Confirmation incorrect');
+        throw new Error('تأكيد كلمة المرور غير صحيح');
       }
       return true;
     }),
 
   check('passwordConfirm')
     .notEmpty()
-    .withMessage('Password confirmation required'),
+    .withMessage('تأكيد كلمة المرور مطلوب'),
 
   check('phone')
     .optional()
     .isMobilePhone(['ar-EG', 'ar-SA'])
-    .withMessage('Invalid phone number; only Egy and SA numbers accepted'),
+    .withMessage('رقم الهاتف غير صالح؛ نقبل فقط الأرقام المصرية والسعودية'),
 
   check('profileImg').optional(),
   
@@ -56,7 +56,7 @@ exports.createUserValidator = [
     .optional()
     .custom((val) => {
       if (val && val !== 'admin') {
-        throw new Error('You can only create admin users. Regular users must sign up through /api/v1/auth/signup');
+        throw new Error('يمكنك فقط إنشاء مستخدمين مشرفين. يجب على المستخدمين العاديين التسجيل عبر /api/v1/auth/signup');
       }
       return true;
     }),
@@ -65,21 +65,21 @@ exports.createUserValidator = [
 ];
 
 exports.getUserValidator = [
-  check('id').isMongoId().withMessage('Invalid User id format'),
+  check('id').isMongoId().withMessage('صيغة معرف المستخدم غير صالحة'),
   validatorMiddleware,
 ];
 
 exports.updateUserValidator = [
-  check('id').isMongoId().withMessage('Invalid User id format'),
+  check('id').isMongoId().withMessage('صيغة معرف المستخدم غير صالحة'),
 
   check('email')
     .optional()
     .isEmail()
-    .withMessage('Invalid email address')
+    .withMessage('عنوان البريد الإلكتروني غير صالح')
     .custom((val) =>
       User.findOne({ email: val }).then((user) => {
         if (user) {
-          return Promise.reject(new Error('E-mail already in use'));
+          return Promise.reject(new Error('البريد الإلكتروني مستخدم بالفعل'));
         }
       })
     ),
@@ -94,37 +94,37 @@ exports.updateUserValidator = [
 ];
 
 exports.deleteUserValidator = [
-  check('id').isMongoId().withMessage('Invalid User id format'),
+  check('id').isMongoId().withMessage('صيغة معرف المستخدم غير صالحة'),
   validatorMiddleware,
 ];
 
 exports.changeAccountPasswordValidator = [
   body('currentPassword')
     .notEmpty()
-    .withMessage('You must enter your current password'),
+    .withMessage('يجب إدخال كلمة المرور الحالية'),
 
   body('passwordConfirm')
     .notEmpty()
-    .withMessage('You must enter the password confirm'),
+    .withMessage('يجب إدخال تأكيد كلمة المرور'),
 
   body('password')
     .notEmpty()
-    .withMessage('You must enter new password')
+    .withMessage('يجب إدخال كلمة المرور الجديدة')
     .custom(async (val, { req }) => {
       const user = await User.findById(req.user._id).select('+password');
       if (!user) {
-        throw new Error('User not found');
+        throw new Error('المستخدم غير موجود');
       }
       const isCorrectPassword = await bcrypt.compare(
         req.body.currentPassword,
         user.password
       );
       if (!isCorrectPassword) {
-        throw new Error('Incorrect current password');
+        throw new Error('كلمة المرور الحالية غير صحيحة');
       }
 
       if (val !== req.body.passwordConfirm) {
-        throw new Error('Password confirmation does not match');
+        throw new Error('تأكيد كلمة المرور لا يتطابق');
       }
       return true;
     }),
@@ -136,13 +136,13 @@ exports.updateLoggedUserDataValidator = [
   check('email')
     .optional()
     .notEmpty()
-    .withMessage('Email required')
+    .withMessage('البريد الإلكتروني مطلوب')
     .isEmail()
-    .withMessage('Invalid email address')
+    .withMessage('عنوان البريد الإلكتروني غير صالح')
     .custom((val) =>
       User.findOne({ email: val }).then((user) => {
         if (user) {
-          return Promise.reject(new Error('E-mail already in use'));
+          return Promise.reject(new Error('البريد الإلكتروني مستخدم بالفعل'));
         }
       })
     ),
@@ -153,7 +153,7 @@ exports.updateLoggedUserDataValidator = [
   check('profileImg')
     .optional()
     .isString()
-    .withMessage('Profile image must be a string (filename)'),
+    .withMessage('يجب أن تكون صورة الملف الشخصي نصًا (اسم الملف)'),
 
   validatorMiddleware,
 ];

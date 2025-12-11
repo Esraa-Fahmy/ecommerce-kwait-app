@@ -4,22 +4,22 @@ const validatorMiddleware = require("../middlewares/validatorMiddleware");
 exports.createOrderValidator = [
   check("cartId")
     .notEmpty()
-    .withMessage("Cart ID is required"),
+    .withMessage("معرف السلة مطلوب"),
 
   check("addressId")
     .notEmpty()
-    .withMessage("Address ID is required"),
+    .withMessage("معرف العنوان مطلوب"),
 
   check("paymentMethod")
     .notEmpty()
-    .withMessage("Payment method is required")
+    .withMessage("طريقة الدفع مطلوبة")
     .isIn(["cod", "visa"])
-    .withMessage("Payment method must be either 'cod' or 'visa'"),
+    .withMessage("يجب أن تكون طريقة الدفع إما 'cod' أو 'visa'"),
 
   check("coupon")
     .optional()
     .isString()
-    .withMessage("Coupon must be a string"),
+    .withMessage("يجب أن يكون الكوبون نصًا"),
 
   validatorMiddleware,
 ];

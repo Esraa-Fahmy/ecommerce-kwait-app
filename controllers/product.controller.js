@@ -188,7 +188,7 @@ exports.getSingleProduct = asyncHandler(async (req, res, next) => {
     .populate("subCategory", "name")
     .populate("subSubCategory", "name");
 
-  if (!productDoc) return next(new ApiError(`No product found for id ${id}`, 404));
+  if (!productDoc) return next(new ApiError(`لا يوجد منتج بهذا المعرف ${id}`, 404));
 
   const product = productDoc.toObject();
 
@@ -247,7 +247,7 @@ exports.updateProduct = asyncHandler(async (req, res, next) => {
   });
 
   if (!product) {
-    return next(new ApiError(`No product found for this id ${id}`, 404));
+    return next(new ApiError(`لا يوجد منتج بهذا المعرف ${id}`, 404));
   }
 
   res.status(200).json({ data: product });
@@ -262,8 +262,8 @@ exports.deleteProduct = asyncHandler(async (req, res, next) => {
   const product = await ProductModel.findByIdAndDelete(id);
 
   if (!product) {
-    return next(new ApiError(`No product found for this id ${id}`, 404));
+    return next(new ApiError(`لا يوجد منتج بهذا المعرف ${id}`, 404));
   }
 
-  res.status(200).json({ message: "Product deleted successfully" });
+  res.status(200).json({ message: "تم حذف المنتج بنجاح" });
 });

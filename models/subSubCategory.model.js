@@ -1,5 +1,6 @@
 // models/subSubCategory.model.js
 const mongoose = require('mongoose');
+const kuwaitTimestamp = require('./plugins/kuwaitTimestamp');
 const ProductModel = require('./product.model')
 
 
@@ -25,7 +26,9 @@ const subSubCategorySchema = new mongoose.Schema({
     required: [true, 'SubSubCategory must belong to parent SubCategory'],
   },
  
-}, { timestamps: true });
+}, { timestamps: false });
+
+subSubCategorySchema.plugin(kuwaitTimestamp);
 
 const setImageURL = (doc) => {
   if (doc.image) {

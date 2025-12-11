@@ -34,25 +34,25 @@ exports.initiatePayment = asyncHandler(async (req, res, next) => {
   const { orderId, paymentMethodId } = req.body;
 
   if (!paymentMethodId) {
-    return next(new ApiError('Payment method is required', 400));
+    return next(new ApiError('طريقة الدفع مطلوبة', 400));
   }
 
   const order = await Order.findById(orderId).populate('user', 'firstName lastName email phone');
   
   if (!order) {
-    return next(new ApiError('Order not found', 404));
+    return next(new ApiError('الطلب غير موجود', 404));
   }
 
   if (order.user._id.toString() !== req.user._id.toString()) {
-    return next(new ApiError('Unauthorized access to this order', 403));
+    return next(new ApiError('وصول غير مصرح به لهذا الطلب', 403));
   }
 
   if (order.paymentMethod !== 'visa') {
-    return next(new ApiError('This order is not set for visa payment', 400));
+    return next(new ApiError('هذا الطلب غير مخصص للدفع بالفيزا', 400));
   }
 
   if (order.status !== 'pending') {
-    return next(new ApiError('This order cannot be paid at this stage', 400));
+    return next(new ApiError('لا يمكن دفع قيمة هذا الطلب في هذه المرحلة', 400));
   }
 
   const paymentResult = await myFatoorah.executePayment(
@@ -86,7 +86,7 @@ exports.initiatePayment = asyncHandler(async (req, res, next) => {
 
   res.status(200).json({
     status: 'success',
-    message: 'Payment initiated successfully',
+    message: 'تم بدء عملية الدفع بنجاح',
     data: {
       paymentURL: paymentResult.paymentURL,
       invoiceId: paymentResult.invoiceId,
@@ -99,7 +99,7 @@ exports.checkPaymentStatus = asyncHandler(async (req, res, next) => {
   const { invoiceId } = req.params;
 
   if (!invoiceId) {
-    return next(new ApiError('Invoice ID is required', 400));
+    return next(new ApiError('معرف الفاتورة مطلوب', 400));
   }
 
   const order = await Order.findOne({ 
@@ -107,11 +107,11 @@ exports.checkPaymentStatus = asyncHandler(async (req, res, next) => {
   });
 
   if (!order) {
-    return next(new ApiError('Order not found', 404));
+    return next(new ApiError('الطلب غير موجود', 404));
   }
 
   if (order.user.toString() !== req.user._id.toString()) {
-    return next(new ApiError('Unauthorized', 403));
+    return next(new ApiError('غير مصرح', 403));
   }
 
   // ✅ إذا كان الأوردر مدفوع، نرجع الحالة مباشرة
@@ -136,7 +136,7 @@ exports.checkPaymentStatus = asyncHandler(async (req, res, next) => {
   if (!paymentStatus.success) {
     return res.status(200).json({
       status: 'pending',
-      message: 'Payment is still pending',
+      message: 'الدفع لا يزال قيد الانتظار',
       orderStatus: order.status,
       paymentStatus: order.paymentDetails?.status || 'pending'
     });
@@ -185,7 +185,7 @@ exports.paymentSuccess = asyncHandler(async (req, res, next) => {
 
   if (!paymentId) {
     console.error('❌ Missing paymentId');
-    return res.redirect(`/payment-failed?message=${encodeURIComponent('Payment ID is required')}`);
+    return res.redirect(`/payment-failed?message=${encodeURIComponent('معرف الدفع مطلوب')}`);
   }
 
   const html = `
@@ -433,7 +433,7 @@ exports.paymentSuccess = asyncHandler(async (req, res, next) => {
 // ❌ Error Callback - iOS 26 Style
 exports.paymentError = asyncHandler(async (req, res, next) => {
   const { paymentId, message } = req.query;
-  let errorMessage = message || 'Payment failed';
+  let errorMessage = message || 'فشلت عملية الدفع';
 
   console.log('❌ Payment Error Callback', { paymentId, message });
 
@@ -681,7 +681,7 @@ exports.paymentWebhook = asyncHandler(async (req, res, next) => {
   
   if (!skipSignatureCheck && !myFatoorah.verifyWebhookSignature(payload, signature)) {
     console.error('⚠️ Invalid webhook signature');
-    return res.status(400).json({ message: 'Invalid signature' });
+    return res.status(400).json({ message: 'توقيع غير صالح' });
   }
 
   if (skipSignatureCheck) {
@@ -692,7 +692,7 @@ exports.paymentWebhook = asyncHandler(async (req, res, next) => {
   
   if (!Data) {
     console.error('❌ Invalid payload: No Data field');
-    return res.status(400).json({ message: 'Invalid payload' });
+    return res.status(400).json({ message: 'حمولة غير صالحة' });
   }
 
   const order = await Order.findById(Data.CustomerReference)
@@ -701,7 +701,7 @@ exports.paymentWebhook = asyncHandler(async (req, res, next) => {
 
   if (!order) {
     console.error('❌ Order not found:', Data.CustomerReference);
-    return res.status(404).json({ message: 'Order not found' });
+    return res.status(404).json({ message: 'الطلب غير موجود' });
   }
 
   console.log('✅ Order found:', {
@@ -724,7 +724,7 @@ exports.paymentWebhook = asyncHandler(async (req, res, next) => {
   }
 
   console.log('✅ Webhook Complete');
-  res.status(200).json({ message: 'Webhook processed successfully' });
+  res.status(200).json({ message: 'تم معالجة "ويب هوك" بنجاح' });
 });
 
 // 🔄 Refund
@@ -734,11 +734,11 @@ exports.refundPayment = asyncHandler(async (req, res, next) => {
   const order = await Order.findById(orderId);
 
   if (!order) {
-    return next(new ApiError('Order not found', 404));
+    return next(new ApiError('الطلب غير موجود', 404));
   }
 
   if (order.paymentDetails?.status !== 'paid') {
-    return next(new ApiError('This order has not been paid yet', 400));
+    return next(new ApiError('لم يتم دفع قيمة هذا الطلب بعد', 400));
   }
 
   const refundResult = await myFatoorah.refundPayment(
@@ -766,7 +766,7 @@ exports.refundPayment = asyncHandler(async (req, res, next) => {
 
   res.status(200).json({
     status: 'success',
-    message: 'Refund processed successfully',
+    message: 'تم استرداد المبلغ بنجاح',
     data: refundResult,
   });
 });

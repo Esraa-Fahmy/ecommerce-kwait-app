@@ -3,25 +3,25 @@ const validatorMiddleware = require("../middlewares/validatorMiddleware");
 const Category = require("../models/category.model");
 
 exports.getSubCategoryValidator = [
-  check("id").isMongoId().withMessage("Invalid subCategory id format"),
+  check("id").isMongoId().withMessage("صيغة معرف الفئة الفرعية غير صالحة"),
   validatorMiddleware,
 ];
 
 exports.createSubCategoryValidation = [
   check("name")
     .notEmpty()
-    .withMessage("subCategory Required")
+    .withMessage("الفئة الفرعية مطلوبة")
     .isLength({ min: 3 })
-    .withMessage("very short subCategory name")
+    .withMessage("اسم الفئة الفرعية قصير جداً")
     .isLength({ max: 40 })
-    .withMessage(" very long subCategory name"),
+    .withMessage("اسم الفئة الفرعية طويل جداً"),
   check("category")
     .isMongoId()
-    .withMessage("invalid category id format")
+    .withMessage("صيغة معرف الفئة غير صالحة")
     .custom(async (categoryId) => {
       const category = await Category.findById(categoryId);
       if (!category) {
-        throw new Error(`No category found with id: ${categoryId}. Please create a category first.`);
+        throw new Error(`لم يتم العثور على فئة بالمعرف: ${categoryId}. يرجى إنشاء فئة أولاً.`);
       }
       return true;
     }),
@@ -29,12 +29,12 @@ exports.createSubCategoryValidation = [
 ];
 
 exports.updateSubCategoryValidation = [
-  check("id").isMongoId().withMessage("Invalid subCategory Id"),
+  check("id").isMongoId().withMessage("معرف الفئة الفرعية غير صالح"),
   check("name").optional(),
   validatorMiddleware,
 ];
 
 exports.deleteSubCategoryValidation = [
-  check("id").isMongoId().withMessage("Invalid subCategory Id"),
+  check("id").isMongoId().withMessage("معرف الفئة الفرعية غير صالح"),
   validatorMiddleware,
 ];

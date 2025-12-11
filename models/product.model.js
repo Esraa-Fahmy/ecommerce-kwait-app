@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const kuwaitTimestamp = require('./plugins/kuwaitTimestamp');
 const offerModel = require('./offer.model');
 
 const productSchema = new mongoose.Schema({
@@ -75,7 +76,9 @@ category: {
 
 
  
-}, { timestamps: true });
+}, { timestamps: false });
+
+productSchema.plugin(kuwaitTimestamp);
 
 
 

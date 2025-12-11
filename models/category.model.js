@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const kuwaitTimestamp = require('./plugins/kuwaitTimestamp');
 const subCategoryModel = require('./subcategory.model');
 const ProductModel = require('./product.model');
 
@@ -18,8 +19,10 @@ const categorySchema = new mongoose.Schema({
         type: String,
     },
     
-}, {timestamps : true}
+}, {timestamps : false}
 );
+
+categorySchema.plugin(kuwaitTimestamp);
 
 
 const setImageURL = (doc) => {

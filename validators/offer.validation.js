@@ -15,37 +15,37 @@ const { query } = require('express-validator');
 exports.getAllOffersValidator = [
   query("productId")
     .optional()
-    .isMongoId().withMessage("Invalid product ID format")
+    .isMongoId().withMessage("صيغة معرف المنتج غير صالحة")
     .custom(async (id) => {
       const product = await productModel.findById(id);
-      if (!product) throw new Error("Product not found");
+      if (!product) throw new Error("المنتج غير موجود");
       return true;
     }),
 
   query("subCategoryId")
     .optional()
-    .isMongoId().withMessage("Invalid subCategory ID format")
+    .isMongoId().withMessage("صيغة معرف الفئة الفرعية غير صالحة")
     .custom(async (id) => {
       const subCat = await subCategoryModel.findById(id);
-      if (!subCat) throw new Error("SubCategory not found");
+      if (!subCat) throw new Error("الفئة الفرعية غير موجودة");
       return true;
     }),
 
   query("subSubCategoryId")
     .optional()
-    .isMongoId().withMessage("Invalid subSubCategory ID format")
+    .isMongoId().withMessage("صيغة معرف الفئة الفرعية الفرعية غير صالحة")
     .custom(async (id) => {
       const subSub = await subSubCategoryModel.findById(id);
-      if (!subSub) throw new Error("SubSubCategory not found");
+      if (!subSub) throw new Error("الفئة الفرعية الفرعية غير موجودة");
       return true;
     }),
 
   query("categoryId")
     .optional()
-    .isMongoId().withMessage("Invalid category ID format")
+    .isMongoId().withMessage("صيغة معرف الفئة غير صالحة")
     .custom(async (id) => {
       const cat = await CategoryModel.findById(id);
-      if (!cat) throw new Error("Category not found");
+      if (!cat) throw new Error("الفئة غير موجودة");
       return true;
     }),
 
@@ -57,10 +57,10 @@ exports.getAllOffersValidator = [
 exports.getOfferValidator = [
   check("id")
     .isMongoId()
-    .withMessage("Invalid offer id format")
+    .withMessage("صيغة معرف العرض غير صالحة")
     .custom(async (id) => {
       const offer = await offerModel.findById(id);
-      if (!offer) throw new Error("Offer not found");
+      if (!offer) throw new Error("العرض غير موجود");
       return true;
     }),
   validatorMiddleware,
@@ -68,42 +68,42 @@ exports.getOfferValidator = [
 
 // ✅ Create Offer
 exports.createOfferValidator = [
-  check("title").notEmpty().withMessage("Offer title is required"),
+  check("title").notEmpty().withMessage("عنوان العرض مطلوب"),
   check("offerType")
     .notEmpty()
-    .withMessage("Offer type is required")
+    .withMessage("نوع العرض مطلوب")
     .isIn(['percentage','fixed','buyXgetY','freeShipping','cartDiscount','coupon'])
-    .withMessage("Invalid offer type"),
+    .withMessage("نوع العرض غير صالح"),
   check("targetType")
     .notEmpty()
-    .withMessage("Target type is required")
+    .withMessage("نوع الهدف مطلوب")
     .isIn(['product','subcategory','subSubcategory','category','cart', 'order'])
-    .withMessage("Invalid target type"),
+    .withMessage("نوع الهدف غير صالح"),
   check("targetIds").custom(async (targetIds, { req }) => {
     if (['product','category','subcategory','subSubcategory'].includes(req.body.targetType)) {
       if (!targetIds || !Array.isArray(targetIds) || targetIds.length === 0)
-        throw new Error("targetIds must be provided as an array");
+        throw new Error("يجب تقديم معرفات الهدف كمصفوفة");
 
       for (const id of targetIds) {
         if (!id.match(/^[0-9a-fA-F]{24}$/))
-          throw new Error(`Invalid ObjectId format: ${id}`);
+          throw new Error(`صيغة معرف الكائن غير صالحة: ${id}`);
         let exists;
         switch (req.body.targetType) {
           case 'product':
             exists = await productModel.findById(id);
-            if (!exists) throw new Error(`Product not found for id: ${id}`);
+            if (!exists) throw new Error(`المنتج غير موجود للمعرف: ${id}`);
             break;
           case 'category':
             exists = await CategoryModel.findById(id);
-            if (!exists) throw new Error(`Category not found for id: ${id}`);
+            if (!exists) throw new Error(`الفئة غير موجودة للمعرف: ${id}`);
             break;
           case 'subcategory':
             exists = await subSubCategoryModel.findById(id);
-            if (!exists) throw new Error(`SubCategory not found for id: ${id}`);
+            if (!exists) throw new Error(`الفئة الفرعية غير موجودة للمعرف: ${id}`);
             break;
           case 'subSubcategory':
             exists = await subSubCategoryModel.findById(id);
-            if (!exists) throw new Error(`SubSubCategory not found for id: ${id}`);
+            if (!exists) throw new Error(`الفئة الفرعية الفرعية غير موجودة للمعرف: ${id}`);
             break;
         }
       }
@@ -113,9 +113,9 @@ exports.createOfferValidator = [
   check("discountValue")
   .if((value, { req }) => req.body.offerType === "coupon" || req.body.offerType === "percentage" || req.body.offerType === "fixed")
   .notEmpty()
-  .withMessage("Discount value must be provided for this offer type"),
-  check("startDate").notEmpty().withMessage("Offer start date is required").isISO8601(),
-  check("endDate").notEmpty().withMessage("Offer end date is required").isISO8601(),
+  .withMessage("يجب تقديم قيمة الخصم لنوع العرض هذا"),
+  check("startDate").notEmpty().withMessage("تاريخ بدء العرض مطلوب").isISO8601(),
+  check("endDate").notEmpty().withMessage("تاريخ انتهاء العرض مطلوب").isISO8601(),
   validatorMiddleware,
 ];
 
@@ -123,10 +123,10 @@ exports.createOfferValidator = [
 exports.updateOfferValidator = [
   check("id")
     .isMongoId()
-    .withMessage("Invalid offer id format")
+    .withMessage("صيغة معرف العرض غير صالحة")
     .custom(async (id) => {
       const offer = await offerModel.findById(id);
-      if (!offer) throw new Error("Offer not found");
+      if (!offer) throw new Error("العرض غير موجود");
       return true;
     }),
   validatorMiddleware,
@@ -136,10 +136,10 @@ exports.updateOfferValidator = [
 exports.deleteOfferValidator = [
   check("id")
     .isMongoId()
-    .withMessage("Invalid offer id format")
+    .withMessage("صيغة معرف العرض غير صالحة")
     .custom(async (id) => {
       const offer = await offerModel.findById(id);
-      if (!offer) throw new Error("Offer not found");
+      if (!offer) throw new Error("العرض غير موجود");
       return true;
     }),
   validatorMiddleware,

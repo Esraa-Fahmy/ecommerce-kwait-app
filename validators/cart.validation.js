@@ -3,23 +3,23 @@ const validatorMiddleware = require("../middlewares/validatorMiddleware");
 
 exports.addToCartValidator = [
   check("productId")
-    .notEmpty().withMessage("Product ID is required")
-    .isMongoId().withMessage("Invalid product ID format"),
+    .notEmpty().withMessage("معرف المنتج مطلوب")
+    .isMongoId().withMessage("صيغة معرف المنتج غير صالحة"),
 
   check("quantity")
     .optional()
     .isInt({ min: 1 })
-    .withMessage("Quantity must be at least 1"),
+    .withMessage("يجب أن تكون الكمية 1 على الأقل"),
 
   check("color")
     .optional()
     .isString()
-    .withMessage("Color must be a valid string"),
+    .withMessage("يجب أن يكون اللون نصًا صالحًا"),
 
   check("size")
     .optional()
     .isString()
-    .withMessage("Size must be a valid string"),
+    .withMessage("يجب أن يكون الحجم نصًا صالحًا"),
 
   validatorMiddleware,
 ];
@@ -29,27 +29,27 @@ exports.addToCartValidator = [
 exports.updateCartItemValidator = [
   check("itemId")
     .isMongoId()
-    .withMessage("Invalid item ID format"),
+    .withMessage("صيغة معرف العنصر غير صالحة"),
 
   check("quantity")
     .optional()
     .isInt({ min: 1 })
-    .withMessage("Quantity must be at least 1"),
+    .withMessage("يجب أن تكون الكمية 1 على الأقل"),
 
   check("color")
     .optional()
     .isString()
-    .withMessage("Color must be a valid string"),
+    .withMessage("يجب أن يكون اللون نصًا صالحًا"),
 
   check("size")
     .optional()
     .isString()
-    .withMessage("Size must be a valid string"),
+    .withMessage("يجب أن يكون الحجم نصًا صالحًا"),
 
   check("material")
     .optional()
     .isString()
-    .withMessage("Material must be a valid string"),
+    .withMessage("يجب أن تكون المادة نصًا صالحًا"),
 
   validatorMiddleware,
 ];
@@ -59,7 +59,7 @@ exports.updateCartItemValidator = [
 exports.removeCartItemValidator = [
   check("itemId")
     .isMongoId()
-    .withMessage("Invalid item ID format"),
+    .withMessage("صيغة معرف العنصر غير صالحة"),
 
   validatorMiddleware,
 ];

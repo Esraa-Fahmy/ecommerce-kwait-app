@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const kuwaitTimestamp = require('./plugins/kuwaitTimestamp');
 
 const notificationSchema = new mongoose.Schema(
   {
@@ -31,8 +32,10 @@ const notificationSchema = new mongoose.Schema(
       default: false,
     },
   },
-  { timestamps: true }
+  { timestamps: false }
 );
+
+notificationSchema.plugin(kuwaitTimestamp);
 
 // ✅ إنشاء index على displayId لضمان السرعة والتفرد
 notificationSchema.index({ displayId: 1 });

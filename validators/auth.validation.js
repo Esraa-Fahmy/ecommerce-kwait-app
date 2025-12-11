@@ -3,29 +3,29 @@ const validatorMiddleware = require('../middlewares/validatorMiddleware');
 const User = require('../models/user.model');
 
 exports.signupValidator = [
- check('firstName')
+  check('firstName')
   .notEmpty()
-  .withMessage('First name is required')
+  .withMessage('الاسم الأول مطلوب')
   .isLength({ min: 2 })
-  .withMessage('Too short first name'),
+  .withMessage('الاسم الأول قصير جداً'),
 
 check('lastName')
   .notEmpty()
-  .withMessage('Last name is required')
+  .withMessage('الاسم الأخير مطلوب')
   .isLength({ min: 2 })
-  .withMessage('Too short last name'),
+  .withMessage('الاسم الأخير قصير جداً'),
 
     
 
   check('email')
     .notEmpty()
-    .withMessage('Email required')
+    .withMessage('البريد الإلكتروني مطلوب')
     .isEmail()
-    .withMessage('Invalid email address')
+    .withMessage('عنوان البريد الإلكتروني غير صالح')
     .custom((val) =>
       User.findOne({ email: val }).then((user) => {
         if (user) {
-          return Promise.reject(new Error('E-mail already in user'));
+          return Promise.reject(new Error('البريد الإلكتروني مستخدم بالفعل'));
         }
       })
     ),
@@ -36,21 +36,21 @@ check('lastName')
 
   check('password')
     .notEmpty()
-    .withMessage('Password required')
+    .withMessage('كلمة المرور مطلوبة')
    .isLength({ min: 4 })
-    .withMessage('Password must be at least 4 characters')
+    .withMessage('يجب أن تكون كلمة المرور 4 أحرف على الأقل')
   .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*._-])/)
-  .withMessage('Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character (!@#$%^&*._-)')
+  .withMessage('يجب أن تحتوي كلمة المرور على حرف كبير واحد على الأقل، وحرف صغير، ورقم، وحرف خاص (!@#$%^&*._-)')
     .custom((password, { req }) => {
       if (password !== req.body.passwordConfirm) {
-        throw new Error('Password Confirmation incorrect');
+        throw new Error('تأكيد كلمة المرور غير صحيح');
       }
       return true;
     }),
 
   check('passwordConfirm')
     .notEmpty()
-    .withMessage('Password confirmation required'),
+    .withMessage('تأكيد كلمة المرور مطلوب'),
 
   validatorMiddleware,
 ];
@@ -60,12 +60,12 @@ check('lastName')
 exports.loginValidator = [
     check('email')
       .notEmpty()
-      .withMessage('Email required')
+      .withMessage('البريد الإلكتروني مطلوب')
       .isEmail()
-      .withMessage('Invalid email address'),
+      .withMessage('عنوان البريد الإلكتروني غير صالح'),
     check('password')
       .notEmpty()
-      .withMessage('Password required'),
+      .withMessage('كلمة المرور مطلوبة'),
 
     validatorMiddleware,
   ];

@@ -89,7 +89,7 @@ exports.getSingleCategory = asyncHandler(async (req, res, next) => {
     const { id } =req.params;
     const category = await CategoryModel.findById(id);
     if(!category) {
-       return next(new ApiError(`No category for this id ${id}`, 404));
+       return next(new ApiError(`لا توجد فئة بهذا المعرف ${id}`, 404));
     }
     res.status(200).json({ data: category })
 });
@@ -107,7 +107,7 @@ const  category = await CategoryModel.findByIdAndUpdate(
 );
 
 if (!category){
-    return next(new ApiError(`No category for this id ${id}`, 404));
+    return next(new ApiError(`لا توجد فئة بهذا المعرف ${id}`, 404));
 }
 res.status(200).json({ data: category })});
 
@@ -121,6 +121,6 @@ exports.deleteCategory = asyncHandler(async (req, res, next) => {
 
 
 if (!category){
-    return next(new ApiError(`No category for this id ${id}`, 404));
+    return next(new ApiError(`لا توجد فئة بهذا المعرف ${id}`, 404));
 }
-res.status(200).json({ message : 'category deleted successfully' })});
+res.status(200).json({ message : 'تم حذف الفئة بنجاح' })});

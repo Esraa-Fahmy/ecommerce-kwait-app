@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const kuwaitTimestamp = require('./plugins/kuwaitTimestamp');
 const productModel = require('./product.model');
 
 const reviewSchema = new mongoose.Schema(
@@ -23,8 +24,10 @@ const reviewSchema = new mongoose.Schema(
       required: [true, 'Rating must belong to a product'],
     },
   },
-  { timestamps: true }
+  { timestamps: false }
 );
+
+reviewSchema.plugin(kuwaitTimestamp);
 
 
 // حساب المتوسط وعدد التقييمات بعد كل إضافة أو حذف

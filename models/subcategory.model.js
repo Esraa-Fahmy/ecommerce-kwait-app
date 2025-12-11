@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const kuwaitTimestamp = require('./plugins/kuwaitTimestamp');
 const SubSubCategory = require('./subSubCategory.model');
 const ProductModel = require('./product.model')
 
@@ -26,8 +27,10 @@ const subCategorySchema = new mongoose.Schema({
 
  },
 
-}, {timestamps : true}
+}, {timestamps : false}
 );
+
+subCategorySchema.plugin(kuwaitTimestamp);
 
 
 

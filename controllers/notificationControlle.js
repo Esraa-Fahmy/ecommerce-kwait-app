@@ -21,7 +21,7 @@ exports.markNotificationsAsRead = asyncHandler(async (req, res) => {
     { isRead: true }
   );
 
-  res.status(200).json({ message: "All notifications marked as read" });
+  res.status(200).json({ message: "تم تحديد جميع الإشعارات كمقروءة" });
 });
 
 // 🗑 Delete single notification
@@ -31,9 +31,9 @@ exports.deleteNotification = asyncHandler(async (req, res, next) => {
     user: req.user._id,
   });
 
-  if (!notification) return next(new ApiError("Notification not found", 404));
+  if (!notification) return next(new ApiError("الإشعار غير موجود", 404));
 
-  res.status(200).json({ message: "Notification deleted successfully" });
+  res.status(200).json({ message: "تم حذف الإشعار بنجاح" });
 });
 
 // 🔢 Get unread count

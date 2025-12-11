@@ -1,5 +1,6 @@
 // models/shippingModel.js
 const mongoose = require('mongoose');
+const kuwaitTimestamp = require('./plugins/kuwaitTimestamp');
 
 const shippingTypeSchema = new mongoose.Schema({
   type: {
@@ -55,6 +56,8 @@ const shippingSchema = new mongoose.Schema({
       message: 'At least one shipping type must be provided'
     }
   }
-}, { timestamps: true });
+}, { timestamps: false });
+
+shippingSchema.plugin(kuwaitTimestamp);
 
 module.exports = mongoose.model('Shipping', shippingSchema);

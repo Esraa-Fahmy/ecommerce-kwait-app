@@ -7,6 +7,7 @@ const Product = require("../models/product.model");
 const Address = require("../models/addressModel");
 const Shipping = require("../models/shippingModel");
 const { sendNotification } = require("../utils/sendNotifications");
+const { kuwaitiDateNow } = require('../utils/dateUtils');
 
 // 🧮 Helper: حساب الإجماليات
 const calculateOrderTotals = async (cart, coupon, user, city, shippingTypeId = 'standard') => {
@@ -23,7 +24,7 @@ const calculateOrderTotals = async (cart, coupon, user, city, shippingTypeId = '
   // ✅ تطبيق كوبون الخصم
   if (coupon) {
     const offer = await Offer.findOne({ couponCode: coupon });
-    const now = new Date();
+    const now = kuwaitiDateNow();
 
     if (!offer) {
       couponMessage = "❌ هذا الكود غير صحيح أو غير موجود.";
@@ -57,7 +58,7 @@ const calculateOrderTotals = async (cart, coupon, user, city, shippingTypeId = '
 
   // التحقق من عروض الشحن المجاني
   if (!hasFreeShipping && city) {
-    const now = new Date();
+    const now = kuwaitiDateNow();
     const freeShippingOffer = await Offer.findOne({
       isActive: true,
       startDate: { $lte: now },
@@ -111,13 +112,13 @@ exports.previewOrder = asyncHandler(async (req, res, next) => {
   const { cartId, coupon } = req.body;
   const cart = await Cart.findById(cartId).populate("cartItems.product");
 
-  if (!cart) return next(new ApiError("Cart not found", 404));
+  if (!cart) return next(new ApiError("السلة غير موجودة", 404));
 
   const totals = await calculateOrderTotals(cart, coupon, req.user);
 
   res.status(200).json({
     status: "success",
-    message: "Order preview calculated successfully",
+    message: "تم حساب معاينة الطلب بنجاح",
     data: {
       products: cart.cartItems,
       ...totals,
@@ -132,14 +133,14 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
   const { cartId, addressId, paymentMethod = "cod", coupon, shippingTypeId = 'standard' } = req.body;
 
   if (!["cod", "visa"].includes(paymentMethod)) {
-    return next(new ApiError("Invalid payment method", 400));
+    return next(new ApiError("طريقة الدفع غير صالحة", 400));
   }
 
   const cart = await Cart.findById(cartId).populate("cartItems.product");
-  if (!cart) return next(new ApiError("Cart not found", 404));
+  if (!cart) return next(new ApiError("السلة غير موجودة", 404));
 
   const address = await Address.findOne({ _id: addressId, user: req.user._id });
-  if (!address) return next(new ApiError("Address not found", 404));
+  if (!address) return next(new ApiError("العنوان غير موجود", 404));
 
   // ✅ التحقق من توفر الشحن للمدينة
   const shipping = await Shipping.findOne({ city: address.city });
@@ -152,7 +153,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
 
   // ✅ Validate same-day shipping cutoff time
   if (shippingTypeId === 'same_day') {
-    const now = new Date();
+    const now = kuwaitiDateNow();
     const cutoffHour = 12;
     if (now.getHours() >= cutoffHour) {
       return next(new ApiError('الشحن في نفس اليوم غير متاح بعد الساعة 12 ظهراً', 400));
@@ -162,12 +163,12 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
   const totals = await calculateOrderTotals(cart, coupon, req.user, address.city, shippingTypeId);
 
   // ✅ Calculate estimated delivery date
-  let estimatedDelivery = new Date();
+  let estimatedDelivery = kuwaitiDateNow();
   let shippingTypeInfo = {
     type: shippingTypeId,
     name: 'شحن عادي',
     deliveryTime: '2-3 أيام',
-    selectedAt: new Date()
+    selectedAt: kuwaitiDateNow()
   };
 
   if (totals.selectedShippingType) {
@@ -175,7 +176,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
       type: totals.selectedShippingType.type,
       name: totals.selectedShippingType.name,
       deliveryTime: totals.selectedShippingType.deliveryTime,
-      selectedAt: new Date()
+      selectedAt: kuwaitiDateNow()
     };
     estimatedDelivery.setHours(estimatedDelivery.getHours() + totals.selectedShippingType.deliveryHours);
   } else {
@@ -197,7 +198,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
     coupon,
     paymentDetails: {
       status: paymentMethod === "visa" ? "pending" : "paid",
-      initiatedAt: new Date(),
+      initiatedAt: kuwaitiDateNow(),
     },
   });
 
@@ -234,7 +235,7 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
 
   res.status(201).json({
     status: "success",
-    message: paymentMethod === "visa" ? "Order created. Please complete payment." : totals.couponMessage || "Order created successfully",
+    message: paymentMethod === "visa" ? "تم إنشاء الطلب. يرجى إتمام الدفع." : totals.couponMessage || "تم إنشاء الطلب بنجاح",
     data: orderResponse,
     requiresPayment: paymentMethod === "visa",
   });
@@ -290,7 +291,7 @@ exports.getOrder = asyncHandler(async (req, res, next) => {
     .populate("cartItems.product", "code title price imageCover")
     .populate("cartItems.appliedOffer");
 
-  if (!order) return next(new ApiError("Order not found", 404));
+  if (!order) return next(new ApiError("الطلب غير موجود", 404));
 
   // 🧠 Smart Check: لو الأوردر لسه pending وفيه invoiceId، نتأكد من MyFatoorah فوراً
   if (
@@ -310,7 +311,7 @@ exports.getOrder = asyncHandler(async (req, res, next) => {
         order.paymentDetails.status = 'paid';
         order.paymentDetails.transactionId = paymentStatus.transactionId;
         order.paymentDetails.paymentMethod = paymentStatus.paymentMethod;
-        order.paymentDetails.paidAt = new Date();
+        order.paymentDetails.paidAt = kuwaitiDateNow();
 
         // خصم الكميات
         for (const item of order.cartItems) {
@@ -357,10 +358,10 @@ exports.updateOrderStatus = asyncHandler(async (req, res, next) => {
   const { status } = req.body;
 
   const order = await Order.findById(id);
-  if (!order) return next(new ApiError("Order not found", 404));
+  if (!order) return next(new ApiError("الطلب غير موجود", 404));
 
   if (["cancelled_by_user", "cancelled_by_admin"].includes(order.status)) {
-    return next(new ApiError("Cannot update a cancelled order", 400));
+    return next(new ApiError("لا يمكن تحديث طلب ملغي", 400));
   }
 
   order.status = status;
@@ -374,7 +375,7 @@ exports.updateOrderStatus = asyncHandler(async (req, res, next) => {
     "order"
   );
 
-  res.status(200).json({ message: "Order status updated", data: order });
+  res.status(200).json({ message: "تم تحديث حالة الطلب", data: order });
 });
 
 // =============================
@@ -383,10 +384,10 @@ exports.updateOrderStatus = asyncHandler(async (req, res, next) => {
 exports.cancelOrder = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
   const order = await Order.findOne({ _id: id, user: req.user._id });
-  if (!order) return next(new ApiError("Order not found", 404));
+  if (!order) return next(new ApiError("الطلب غير موجود", 404));
 
   if (order.status !== "pending") {
-    return next(new ApiError("You can only cancel pending orders", 400));
+    return next(new ApiError("يمكنك فقط إلغاء الطلبات المعلقة", 400));
   }
 
   order.status = "cancelled_by_user";
@@ -400,5 +401,5 @@ exports.cancelOrder = asyncHandler(async (req, res, next) => {
     "order"
   );
 
-  res.status(200).json({ message: "Order cancelled successfully", data: order });
+  res.status(200).json({ message: "تم إلغاء الطلب بنجاح", data: order });
 });

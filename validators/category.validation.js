@@ -2,7 +2,7 @@ const { check } = require('express-validator');
 const validatorMiddleware = require('../middlewares/validatorMiddleware');
 
 exports.getCategoryValidator = [
-  check('id').isMongoId().withMessage('Invalid category id format'),
+  check('id').isMongoId().withMessage('صيغة معرف الفئة غير صالحة'),
   validatorMiddleware,
 ];
 
@@ -11,22 +11,22 @@ exports.getCategoryValidator = [
 exports.createCategoryValidation = [
   check('name')
   .notEmpty()
-  .withMessage('Category Required')
+  .withMessage('اسم الفئة مطلوب')
   .isLength({ min : 3})
-  .withMessage('very short category name')
+  .withMessage('اسم الفئة قصير جداً')
   .isLength({max: 40})
-  .withMessage(' very long category name'),
+  .withMessage('اسم الفئة طويل جداً'),
  ]
 
 
 exports.updateCategoryValidation = [
-  check('id').isMongoId().withMessage('Invalid category Id'),
+  check('id').isMongoId().withMessage('معرف الفئة غير صالح'),
   check('name').optional(),
 check('image').optional(),
   validatorMiddleware
 ]
 
 exports.deleteCategoryValidation = [
-  check('id').isMongoId().withMessage('Invalid category Id'),
+  check('id').isMongoId().withMessage('معرف الفئة غير صالح'),
   validatorMiddleware
 ]

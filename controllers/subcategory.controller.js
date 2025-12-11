@@ -100,7 +100,7 @@ exports.getSingleSubCategory = asyncHandler(async (req, res, next) => {
     const subCategory = await subCategoryModel.findById(id).populate({path: 'category', select:'name -_id'});
 
     if(!subCategory) {
-       return next(new ApiError(`No subCategory for this id ${id}`, 404));
+       return next(new ApiError(`لا يوجد تصنيف فرعي بهذا المعرف ${id}`, 404));
     }
     res.status(200).json({ data: subCategory })
 });
@@ -117,7 +117,7 @@ const subCategory = await subCategoryModel.findByIdAndUpdate(
 );
 
 if (!subCategory){
-    return next(new ApiError(`No subCategory for this id ${id}`, 404));
+    return next(new ApiError(`لا يوجد تصنيف فرعي بهذا المعرف ${id}`, 404));
 }
 res.status(200).json({ data: subCategory })});
 
@@ -131,6 +131,6 @@ exports.deletesubCategory = asyncHandler(async (req, res, next) => {
 
 
 if (!subCategory){
-    return next(new ApiError(`No subCategory for this id ${id}`, 404));
+    return next(new ApiError(`لا يوجد تصنيف فرعي بهذا المعرف ${id}`, 404));
 }
-res.status(200).json({ message : 'subCategory deleted successfully' })});
+res.status(200).json({ message : 'تم حذف التصنيف الفرعي بنجاح' })});

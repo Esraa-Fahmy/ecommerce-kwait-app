@@ -90,7 +90,7 @@ exports.getSingleSubSubCategory = asyncHandler(async (req, res, next) => {
     .populate('subCategory', 'name -_id');
 
   if (!subSubCategory) {
-    return next(new ApiError(`No SubSubCategory for this id ${id}`, 404));
+    return next(new ApiError(`لا يوجد تصنيف فرعي ثانٍ بهذا المعرف ${id}`, 404));
   }
   res.status(200).json({ data: subSubCategory });
 });
@@ -102,7 +102,7 @@ exports.updateSubSubCategory = asyncHandler(async (req, res, next) => {
   const subSubCategory = await SubSubCategory.findByIdAndUpdate(id, req.body, { new: true });
 
   if (!subSubCategory) {
-    return next(new ApiError(`No SubSubCategory for this id ${id}`, 404));
+    return next(new ApiError(`لا يوجد تصنيف فرعي ثانٍ بهذا المعرف ${id}`, 404));
   }
   res.status(200).json({ data: subSubCategory });
 });
@@ -113,7 +113,7 @@ exports.deleteSubSubCategory = asyncHandler(async (req, res, next) => {
   const subSubCategory = await SubSubCategory.findByIdAndDelete(id);
 
   if (!subSubCategory) {
-    return next(new ApiError(`No SubSubCategory for this id ${id}`, 404));
+    return next(new ApiError(`لا يوجد تصنيف فرعي ثانٍ بهذا المعرف ${id}`, 404));
   }
-  res.status(200).json({ message: 'SubSubCategory deleted successfully' });
+  res.status(200).json({ message: 'تم حذف التصنيف الفرعي الثاني بنجاح' });
 });

@@ -14,20 +14,20 @@ exports.addProductToWishlist = asyncHandler(async (req, res, next) => {
   if (!product) {
     return res.status(404).json({
       status: "fail",
-      message: "product not found. It may have been deleted.",
+      message: "المنتج غير موجود. قد يكون تم حذفه.",
     });
   }
 
   const user = await User.findById(req.user._id);
   if (!user) {
-    return next(new ApiError("User not found", 404));
+    return next(new ApiError("المستخدم غير موجود", 404));
   }
 
   // ❌ منع الـ Admin من إضافة قصص إلى الـ wishlist
   if (user.role === "admin") {
     return res.status(400).json({
       status: "fail",
-      message: "Admin cannot add products to wishlist.",
+      message: "لا يمكن للمشرف إضافة منتجات إلى قائمة الرغبات.",
     });
   }
 
@@ -36,7 +36,7 @@ exports.addProductToWishlist = asyncHandler(async (req, res, next) => {
 const updatedUser = await User.findByIdAndUpdate(req.user._id, { $addToSet: { wishlist: productId } }, { new: true }).select("wishlist");
 res.status(200).json({
   status: "success",
-  message: "Product added successfully to your wishlist.",
+  message: "تم إضافة المنتج بنجاح إلى قائمة الرغبات.",
   wishlistCount: updatedUser.wishlist.length,
   data: updatedUser.wishlist,
 });
@@ -55,20 +55,20 @@ exports.removeProductFromWishlist = asyncHandler(async (req, res, next) => {
   if (!product) {
     return res.status(404).json({
       status: "fail",
-      message: "product not found. It may have been deleted.",
+      message: "المنتج غير موجود. قد يكون تم حذفه.",
     });
   }
 
   const user = await User.findById(req.user._id);
   if (!user) {
-    return next(new ApiError("User not found", 404));
+    return next(new ApiError("المستخدم غير موجود", 404));
   }
 
   // ❌ منع الـ Admin من حذف القصص من الـ wishlist
   if (user.role === "admin") {
     return res.status(400).json({
       status: "fail",
-      message: "Admin cannot remove products from wishlist.",
+      message: "لا يمكن للمشرف إزالة منتجات من قائمة الرغبات.",
     });
   }
 
@@ -81,7 +81,7 @@ exports.removeProductFromWishlist = asyncHandler(async (req, res, next) => {
 
   res.status(200).json({
     status: "success",
-    message: "product removed successfully from your wishlist.",
+    message: "تم إزالة المنتج بنجاح من قائمة الرغبات.",
     data: updatedUser.wishlist,
   });
 });
@@ -117,6 +117,6 @@ exports.clearWishlist = asyncHandler(async (req, res) => {
 
   res.status(200).json({
     status: "success",
-    message: "All wishlist items have been removed successfully.",
+    message: "تم إزالة جميع عناصر قائمة الرغبات بنجاح.",
   });
 });

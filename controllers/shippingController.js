@@ -8,7 +8,7 @@ exports.addCity = asyncHandler(async (req, res, next) => {
   const { city, cost, shippingTypes } = req.body;
 
   const existing = await Shipping.findOne({ city });
-  if (existing) return next(new ApiError("City already exists", 400));
+  if (existing) return next(new ApiError("المدينة موجودة بالفعل", 400));
 
   // ✅ Support both old format (cost) and new format (shippingTypes)
   const cityData = { city };
@@ -20,7 +20,7 @@ exports.addCity = asyncHandler(async (req, res, next) => {
     // Old format - will be converted to standard type by pre-save hook
     cityData.cost = cost;
   } else {
-    return next(new ApiError("Please provide either cost or shippingTypes", 400));
+    return next(new ApiError("يرجى تقديم التكلفة أو أنواع الشحن", 400));
   }
 
   const newCity = await Shipping.create(cityData);
@@ -39,7 +39,7 @@ exports.updateCity = asyncHandler(async (req, res, next) => {
   const { city: cityName, cost, shippingTypes } = req.body;
 
   const city = await Shipping.findById(id);
-  if (!city) return next(new ApiError("City not found", 404));
+  if (!city) return next(new ApiError("المدينة غير موجودة", 404));
 
   // ✅ Update city name if provided
   if (cityName !== undefined) {
@@ -49,7 +49,7 @@ exports.updateCity = asyncHandler(async (req, res, next) => {
       _id: { $ne: id } 
     });
     if (existingCity) {
-      return next(new ApiError("City name already exists", 400));
+      return next(new ApiError("اسم المدينة موجود بالفعل", 400));
     }
     city.city = cityName;
   }
@@ -76,9 +76,9 @@ exports.updateCity = asyncHandler(async (req, res, next) => {
 exports.deleteCity = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
   const city = await Shipping.findByIdAndDelete(id);
-  if (!city) return next(new ApiError("City not found", 404));
+  if (!city) return next(new ApiError("المدينة غير موجودة", 404));
 
-  res.status(200).json({ status: "success", message: "City removed" });
+  res.status(200).json({ status: "success", message: "تم حذف المدينة" });
 });
 
 // =============================
@@ -91,12 +91,12 @@ exports.addShippingType = asyncHandler(async (req, res, next) => {
   const { type, name, cost, deliveryTime, deliveryHours, cutoffTime, isActive } = req.body;
 
   const city = await Shipping.findById(cityId);
-  if (!city) return next(new ApiError("City not found", 404));
+  if (!city) return next(new ApiError("المدينة غير موجودة", 404));
 
   // Check if type already exists
   const existingType = city.shippingTypes.find(t => t.type === type);
   if (existingType) {
-    return next(new ApiError(`Shipping type '${type}' already exists for this city`, 400));
+    return next(new ApiError(`نوع الشحن '${type}' موجود بالفعل لهذه المدينة`, 400));
   }
 
   // Add new shipping type
@@ -113,7 +113,7 @@ exports.addShippingType = asyncHandler(async (req, res, next) => {
   await city.save();
   res.status(201).json({ 
     status: "success", 
-    message: "Shipping type added successfully",
+    message: "تم إضافة نوع الشحن بنجاح",
     data: city 
   });
 });
@@ -124,12 +124,12 @@ exports.updateShippingType = asyncHandler(async (req, res, next) => {
   const updates = req.body;
 
   const city = await Shipping.findById(cityId);
-  if (!city) return next(new ApiError("City not found", 404));
+  if (!city) return next(new ApiError("المدينة غير موجودة", 404));
 
   // Find the shipping type by _id
   const shippingType = city.shippingTypes.id(typeId);
   if (!shippingType) {
-    return next(new ApiError("Shipping type not found", 404));
+    return next(new ApiError("نوع الشحن غير موجود", 404));
   }
 
   // Update only provided fields
@@ -143,7 +143,7 @@ exports.updateShippingType = asyncHandler(async (req, res, next) => {
   await city.save();
   res.status(200).json({ 
     status: "success", 
-    message: "Shipping type updated successfully",
+    message: "تم تحديث نوع الشحن بنجاح",
     data: city 
   });
 });
@@ -153,12 +153,12 @@ exports.deleteShippingType = asyncHandler(async (req, res, next) => {
   const { cityId, typeId } = req.params;
 
   const city = await Shipping.findById(cityId);
-  if (!city) return next(new ApiError("City not found", 404));
+  if (!city) return next(new ApiError("المدينة غير موجودة", 404));
 
   // Find and remove the shipping type
   const shippingType = city.shippingTypes.id(typeId);
   if (!shippingType) {
-    return next(new ApiError("Shipping type not found", 404));
+    return next(new ApiError("نوع الشحن غير موجود", 404));
   }
 
   shippingType.remove();
@@ -166,7 +166,7 @@ exports.deleteShippingType = asyncHandler(async (req, res, next) => {
 
   res.status(200).json({ 
     status: "success", 
-    message: "Shipping type deleted successfully",
+    message: "تم حذف نوع الشحن بنجاح",
     data: city 
   });
 });
@@ -177,12 +177,12 @@ exports.getAvailableShippingTypes = asyncHandler(async (req, res, next) => {
   const { city } = req.query;
   
   if (!city) {
-    return next(new ApiError("City parameter is required", 400));
+    return next(new ApiError("معرف المدينة مطلوب", 400));
   }
 
   const shipping = await Shipping.findOne({ city });
   if (!shipping) {
-    return next(new ApiError("No shipping available for this city", 404));
+    return next(new ApiError("لا يوجد شحن متاح لهذه المدينة", 404));
   }
 
   // Check current time for same-day availability
