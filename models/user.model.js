@@ -25,7 +25,10 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
     },
     phone: String,
-    profileImg: String,
+    profileImg: {
+      type: String,
+      default: 'OIP.jpg',
+    },
     password: {
       type: String,
       required: [true, 'Password required'],
