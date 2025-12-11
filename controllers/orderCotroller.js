@@ -209,9 +209,13 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
 
   if (paymentMethod === "cod") {
     for (const item of order.cartItems) {
-      await Product.findByIdAndUpdate(item.product._id, {
+      const updatedProduct = await Product.findByIdAndUpdate(item.product._id, {
         $inc: { quantity: -item.quantity, sold: item.quantity },
-      });
+      }, { new: true });
+
+      if (updatedProduct && updatedProduct.quantity <= 0) {
+        await Product.findByIdAndDelete(updatedProduct._id);
+      }
     }
 
     await sendNotification(
@@ -315,9 +319,13 @@ exports.getOrder = asyncHandler(async (req, res, next) => {
 
         // خصم الكميات
         for (const item of order.cartItems) {
-          await Product.findByIdAndUpdate(item.product._id, {
+          const updatedProduct = await Product.findByIdAndUpdate(item.product._id, {
             $inc: { quantity: -item.quantity, sold: item.quantity },
-          });
+          }, { new: true });
+
+          if (updatedProduct && updatedProduct.quantity <= 0) {
+            await Product.findByIdAndDelete(updatedProduct._id);
+          }
         }
 
         // حذف السلة

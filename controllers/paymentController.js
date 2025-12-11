@@ -788,9 +788,14 @@ async function processSuccessfulPayment(order, paymentStatus) {
   // خصم الكميات
   for (const item of order.cartItems) {
     try {
-      await Product.findByIdAndUpdate(item.product, {
+      const updatedProduct = await Product.findByIdAndUpdate(item.product, {
         $inc: { quantity: -item.quantity, sold: item.quantity },
-      });
+      }, { new: true });
+
+      if (updatedProduct && updatedProduct.quantity <= 0) {
+        await Product.findByIdAndDelete(updatedProduct._id);
+        console.log(`🗑️ Product ${item.product} deleted (Out of Stock).`);
+      }
       console.log(`✅ Inventory updated for product ${item.product}`);
     } catch (error) {
       console.error(`❌ Failed to update inventory for ${item.product}`, error);
