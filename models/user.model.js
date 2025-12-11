@@ -69,7 +69,9 @@ userSchema.plugin(kuwaitTimestamp);
 // صورة البروفايل
 const setImageURL = (doc) => {
   if (doc.profileImg) {
-    const imageUrl = `${process.env.BASE_URL}/users/${doc.profileImg}`;
+    const imageUrl = doc.profileImg.startsWith("http")
+      ? doc.profileImg
+      : `${process.env.BASE_URL}/users/${doc.profileImg}`;
     doc.profileImg = imageUrl;
   }
 };
