@@ -68,6 +68,11 @@ userSchema.plugin(kuwaitTimestamp);
 
 // صورة البروفايل
 const setImageURL = (doc) => {
+  // ✅ لو الصورة فاضية (للمستخدمين القدامى)، نعتبرها OIP.jpg
+  if (!doc.profileImg) {
+    doc.profileImg = 'OIP.jpg';
+  }
+
   if (doc.profileImg) {
     const imageUrl = doc.profileImg.startsWith("http")
       ? doc.profileImg
