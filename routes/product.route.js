@@ -24,7 +24,7 @@ const router = express.Router();
 // ============= Routes =============
 
 // ✅ Get Minimal Product List
-router.get("/min-list", getMinimalProducts);
+router.get("/min-list", optionalAuth, getMinimalProducts);
 
 // ✅ Get All Products / Create Product
 router
