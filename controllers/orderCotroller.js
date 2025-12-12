@@ -254,6 +254,9 @@ exports.getUserOrders = asyncHandler(async (req, res) => {
     .populate("cartItems.appliedOffer")
     .sort({ createdAt: -1 });
   
+  // 🧠 Batch Smart Check for Pending Orders
+  await Promise.all(orders.map(order => checkAndUpdatePaymentStatus(order)));
+
   const formattedOrders = orders.map(order => {
     const orderObj = order.toObject();
     if (orderObj.paymentMethod === 'cod') {
@@ -275,6 +278,9 @@ exports.getAllOrders = asyncHandler(async (req, res) => {
     .populate("cartItems.appliedOffer")
     .sort({ createdAt: -1 });
   
+  // 🧠 Batch Smart Check for Pending Orders
+  await Promise.all(orders.map(order => checkAndUpdatePaymentStatus(order)));
+
   const formattedOrders = orders.map(order => {
     const orderObj = order.toObject();
     if (orderObj.paymentMethod === 'cod') {
@@ -297,58 +303,8 @@ exports.getOrder = asyncHandler(async (req, res, next) => {
 
   if (!order) return next(new ApiError("الطلب غير موجود", 404));
 
-  // 🧠 Smart Check: لو الأوردر لسه pending وفيه invoiceId، نتأكد من MyFatoorah فوراً
-  if (
-    order.paymentMethod === 'knet' && 
-    order.paymentDetails.status !== 'paid' && 
-    order.paymentDetails.invoiceId
-  ) {
-    try {
-      const myFatoorah = require("../utils/myFatoorah");
-      const paymentStatus = await myFatoorah.getPaymentStatus(order.paymentDetails.invoiceId, 'InvoiceId');
-
-      if (paymentStatus.success && paymentStatus.status === 'Paid') {
-        console.log(`🧠 Smart Check: Order ${order._id} found PAID in MyFatoorah. Updating...`);
-        
-        // تحديث الأوردر
-        order.status = 'confirmed';
-        order.paymentDetails.status = 'paid';
-        order.paymentDetails.transactionId = paymentStatus.transactionId;
-        order.paymentDetails.paymentMethod = paymentStatus.paymentMethod;
-        order.paymentDetails.paidAt = kuwaitiDateNow();
-
-        // خصم الكميات
-        for (const item of order.cartItems) {
-          const updatedProduct = await Product.findByIdAndUpdate(item.product._id, {
-            $inc: { quantity: -item.quantity, sold: item.quantity },
-          }, { new: true });
-
-          if (updatedProduct && updatedProduct.quantity <= 0) {
-            await Product.findByIdAndDelete(updatedProduct._id);
-          }
-        }
-
-        // حذف السلة
-        if (order.cart) {
-          await Cart.findByIdAndDelete(order.cart);
-        }
-
-        await order.save();
-        
-        // إرسال إشعار (في الخلفية عشان ما نعطلش الرد)
-        const { sendNotification } = require("../utils/sendNotifications");
-        sendNotification(
-          order.user._id,
-          'تم الدفع بنجاح ✅',
-          `تم تأكيد دفع طلبك رقم ${order._id} بنجاح.`,
-          'order'
-        ).catch(err => console.error('Notification Error:', err));
-      }
-    } catch (error) {
-      console.error('❌ Smart Check Error:', error.message);
-      // نكمل عادي ونرجع الأوردر بحالته الحالية لو حصل خطأ في التحقق
-    }
-  }
+  // 🧠 Smart Check
+  await checkAndUpdatePaymentStatus(order);
   
   let orderResponse = order.toObject();
   if (orderResponse.paymentMethod === 'cod') {
@@ -411,3 +367,76 @@ exports.cancelOrder = asyncHandler(async (req, res, next) => {
 
   res.status(200).json({ message: "تم إلغاء الطلب بنجاح", data: order });
 });
+
+// =============================
+// 🧠 HELPER: Smart Payment Check Logic
+// =============================
+async function checkAndUpdatePaymentStatus(order) {
+  // شروط التحقق: knet, مش مدفوع, وفيه invoiceId
+  if (
+    order.paymentMethod === 'knet' && 
+    order.paymentDetails.status !== 'paid' && 
+    order.paymentDetails.invoiceId
+  ) {
+    try {
+      const myFatoorah = require("../utils/myFatoorah");
+      const paymentStatus = await myFatoorah.getPaymentStatus(order.paymentDetails.invoiceId, 'InvoiceId');
+
+      if (!paymentStatus.success) return;
+
+      if (paymentStatus.status === 'Paid') {
+        console.log(`🧠 Smart Check: Order ${order._id} found PAID in MyFatoorah. Updating...`);
+        
+        order.status = 'confirmed';
+        order.paymentDetails.status = 'paid';
+        order.paymentDetails.transactionId = paymentStatus.transactionId;
+        order.paymentDetails.paymentMethod = paymentStatus.paymentMethod;
+        order.paymentDetails.paidAt = kuwaitiDateNow();
+
+        // خصم الكميات
+        for (const item of order.cartItems) {
+           const productId = item.product._id || item.product;
+           const updatedProduct = await Product.findByIdAndUpdate(productId, {
+            $inc: { quantity: -item.quantity, sold: item.quantity },
+          }, { new: true });
+
+          if (updatedProduct && updatedProduct.quantity <= 0) {
+            await Product.findByIdAndDelete(updatedProduct._id);
+          }
+        }
+
+        if (order.cart) {
+          await Cart.findByIdAndDelete(order.cart);
+        }
+
+        await order.save();
+        
+        const { sendNotification } = require("../utils/sendNotifications");
+        sendNotification(
+          order.user._id || order.user, 
+          'تم الدفع بنجاح ✅',
+          `تم تأكيد دفع طلبك رقم ${order._id} بنجاح.`,
+          'order'
+        ).catch(err => console.error('Notification Error:', err));
+
+      } else if (paymentStatus.status === 'Failed' || paymentStatus.status === 'Cancelled') {
+        console.log(`🧠 Smart Check: Order ${order._id} found FAILED in MyFatoorah. Updating...`);
+        
+        order.status = 'failed';
+        order.paymentDetails.status = 'failed';
+        order.paymentDetails.failedAt = kuwaitiDateNow();
+        await order.save();
+        
+        const { sendNotification } = require("../utils/sendNotifications");
+        sendNotification(
+          order.user._id || order.user,
+          'فشل الدفع ❌',
+          `فشلت عملية دفع طلبك رقم ${order._id}.`,
+          'order'
+        ).catch(err => console.error('Notification Error:', err));
+      }
+    } catch (error) {
+      console.error(`❌ Smart Check Error for ${order._id}:`, error.message);
+    }
+  }
+}

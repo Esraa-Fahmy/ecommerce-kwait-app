@@ -5,6 +5,7 @@ const {
   createProduct,
   updateProduct,
   deleteProduct,
+  getMinimalProducts,
   uploadProductImages,
   resizeProductImages
 } = require('../controllers/product.controller');
@@ -21,6 +22,9 @@ const {
 const router = express.Router();
 
 // ============= Routes =============
+
+// ✅ Get Minimal Product List
+router.get("/min-list", getMinimalProducts);
 
 // ✅ Get All Products / Create Product
 router

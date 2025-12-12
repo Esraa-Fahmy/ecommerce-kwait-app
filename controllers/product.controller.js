@@ -267,3 +267,25 @@ exports.deleteProduct = asyncHandler(async (req, res, next) => {
 
   res.status(200).json({ message: "تم حذف المنتج بنجاح" });
 });
+
+// @desc    Get minimal products list (ID, Title, Image, Price, Rating)
+// @route   GET /api/v1/product/min-list
+// @access  Public
+exports.getMinimalProducts = asyncHandler(async (req, res) => {
+  const products = await ProductModel.find({})
+    .select("_id title imageCover price ratingsAverage")
+    .sort("-createdAt");
+
+  const mappedProducts = products.map(p => ({
+    _id: p._id,
+    title: p.title,
+    image: p.imageCover,
+    price: p.price,
+    rating: p.ratingsAverage
+  }));
+
+  res.status(200).json({
+    results: mappedProducts.length,
+    data: mappedProducts,
+  });
+});
