@@ -159,7 +159,7 @@ exports.deleteShippingType = asyncHandler(async (req, res, next) => {
     return next(new ApiError("نوع الشحن غير موجود", 404));
   }
 
-  shippingType.remove();
+  city.shippingTypes.pull(typeId);
   await city.save();
 
   res.status(200).json({ 
