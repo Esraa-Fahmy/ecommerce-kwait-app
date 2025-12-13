@@ -64,7 +64,7 @@ const orderSchema = new mongoose.Schema({
     },
     type: {
       type: String,
-      enum: ['standard', 'express', 'same_day', 'custom'],
+      enum: ['standard', 'express', 'same_day'],
       default: 'standard'
     },
     name: String,

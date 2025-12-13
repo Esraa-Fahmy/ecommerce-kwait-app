@@ -84,34 +84,53 @@ exports.deleteCity = asyncHandler(async (req, res, next) => {
 // =============================
 
 // @desc Add shipping type to city
+// @desc Add shipping type to city (Single or Multiple)
 exports.addShippingType = asyncHandler(async (req, res, next) => {
   const { cityId } = req.params;
-  const { type, name, cost, deliveryTime, deliveryHours, cutoffTime, isActive } = req.body;
-
+  
   const city = await Shipping.findById(cityId);
   if (!city) return next(new ApiError("المدينة غير موجودة", 404));
 
-  // Check if type already exists
-  const existingType = city.shippingTypes.find(t => t.type === type);
-  if (existingType) {
-    return next(new ApiError(`نوع الشحن '${type}' موجود بالفعل لهذه المدينة`, 400));
+  let typesToAdd = [];
+
+  // Check if multiple types sent in array
+  if (req.body.shippingTypes && Array.isArray(req.body.shippingTypes)) {
+    typesToAdd = req.body.shippingTypes;
+  } else {
+    // Single type (Legacy support)
+    typesToAdd = [req.body];
   }
 
-  // Add new shipping type
-  city.shippingTypes.push({
-    type,
-    name,
-    cost,
-    deliveryTime,
-    deliveryHours,
-    cutoffTime: cutoffTime || null,
-    isActive: isActive !== undefined ? isActive : true
-  });
+  for (const item of typesToAdd) {
+    const { type, name, cost, deliveryTime, deliveryHours, cutoffTime, isActive } = item;
+
+    // Validate required fields (Basic check)
+    if (!type || !name || cost === undefined || !deliveryTime) {
+      return next(new ApiError("بيانات نوع الشحن غير مكتملة (type, name, cost, deliveryTime)", 400));
+    }
+
+    // Check if type already exists
+    const existingType = city.shippingTypes.find(t => t.type === type);
+    if (existingType) {
+      return next(new ApiError(`نوع الشحن '${type}' موجود بالفعل لهذه المدينة`, 400));
+    }
+
+    // Add new shipping type
+    city.shippingTypes.push({
+      type,
+      name,
+      cost,
+      deliveryTime,
+      deliveryHours,
+      cutoffTime: cutoffTime || null,
+      isActive: isActive !== undefined ? isActive : true
+    });
+  }
 
   await city.save();
   res.status(201).json({ 
     status: "success", 
-    message: "تم إضافة نوع الشحن بنجاح",
+    message: "تم إضافة نوع/أنواع الشحن بنجاح",
     data: city 
   });
 });
